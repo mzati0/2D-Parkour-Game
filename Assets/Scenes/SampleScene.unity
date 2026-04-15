@@ -2114,7 +2114,7 @@ MonoBehaviour:
   maxAcceleration: 10
   minFlowRegen: 1
   maxFlowRegen: 5
-  flowDecayRate: 40
+  flowDecayRate: 30
   flowDecaySpeedThreshold: 2
   footPosition: {fileID: 1016298070}
   headPosition: {fileID: 34217616}

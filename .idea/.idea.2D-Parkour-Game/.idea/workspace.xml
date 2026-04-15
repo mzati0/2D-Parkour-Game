@@ -5,19 +5,10 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="c43372a0-2222-45b5-a268-286248e62425" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/Assets/DefaultVolumeProfile.asset" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/DefaultVolumeProfile.asset" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/.idea.2D-Parkour-Game/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/.idea.2D-Parkour-Game/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Assets/ParkourController.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/ParkourController.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Assets/Prefabs/Chunk_Easy_KongVault.prefab" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Prefabs/Chunk_Easy_KongVault.prefab" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Assets/Prefabs/Chunk_Easy_Slide.prefab" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Prefabs/Chunk_Easy_Slide.prefab" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Assets/Prefabs/Chunk_Easy_Stumble.prefab" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Prefabs/Chunk_Easy_Stumble.prefab" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Assets/Prefabs/Chunk_Easy_Vault.prefab" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/Assets/Prefabs/Chunk_Easy_Vault.prefab.meta" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/Assets/Prefabs/Chunk_Easy_Vault 1.prefab" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Prefabs/Chunk_Easy_Vault 1.prefab" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Assets/Scenes/SampleScene.unity" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Scenes/SampleScene.unity" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Assets/Settings/UniversalRP.asset" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Settings/UniversalRP.asset" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Assets/UniversalRenderPipelineGlobalSettings.asset" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/UniversalRenderPipelineGlobalSettings.asset" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Assets/laser.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/laser.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ProjectSettings/GraphicsSettings.asset" beforeDir="false" afterPath="$PROJECT_DIR$/ProjectSettings/GraphicsSettings.asset" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ProjectSettings/ProjectSettings.asset" beforeDir="false" afterPath="$PROJECT_DIR$/ProjectSettings/ProjectSettings.asset" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -114,7 +105,7 @@
       <option name="presentableId" value="Default" />
       <updated>1774951729521</updated>
       <workItem from="1774951732129" duration="715000" />
-      <workItem from="1776262580017" duration="12000000" />
+      <workItem from="1776262580017" duration="14446000" />
     </task>
     <servers />
   </component>
