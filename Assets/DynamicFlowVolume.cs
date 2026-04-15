@@ -10,11 +10,11 @@ public class DynamicFlowVision : MonoBehaviour
     [Header("Settings")]
     public float lerpSpeed = 5f; // How fast the vignette fades in/out
 
-    private float currentVisualWeight = 1f;
+    private float _currentVisualWeight = 1f;
 
-    void Update()
+    private void Update()
     {
-        if (suffocationVolume == null || playerController == null) return;
+        if (!suffocationVolume || !playerController) return;
 
         // 1. Get the INSTANT math ratio
         float targetFlowRatio = playerController.currentFlowMeter / playerController.maxFlowMeter;
@@ -23,9 +23,9 @@ public class DynamicFlowVision : MonoBehaviour
         float targetWeight = 1f - targetFlowRatio; 
 
         // 3. Smoothly Lerp the current visual weight towards that target
-        currentVisualWeight = Mathf.Lerp(currentVisualWeight, targetWeight, Time.deltaTime * lerpSpeed);
+        _currentVisualWeight = Mathf.Lerp(_currentVisualWeight, targetWeight, Time.deltaTime * lerpSpeed);
 
         // 4. Apply the smoothed value to the volume
-        suffocationVolume.weight = currentVisualWeight; 
+        suffocationVolume.weight = _currentVisualWeight; 
     }
 }

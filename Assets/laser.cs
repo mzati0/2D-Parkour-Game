@@ -8,27 +8,26 @@ public class RedLaserDeathWall : MonoBehaviour
     public float acceleration = 0.5f; // How much speed it gains per second
     public float maxSpeed = 15f; // The absolute cap
     
-    private float currentSpeed;
-    private bool isChasing = false;
+    private float _currentSpeed;
 
-    void Awake()
+    private void Awake()
     {
-        currentSpeed = startingSpeed;
+        _currentSpeed = startingSpeed;
     }
 
-    void Update()
+    private void Update()
     {
             // 1. Increase the speed every frame
-            currentSpeed += acceleration * Time.deltaTime;
+            _currentSpeed += acceleration * Time.deltaTime;
             
             // 2. Clamp it so it doesn't get infinitely fast
-            currentSpeed = Mathf.Clamp(currentSpeed, 0, maxSpeed);
+            _currentSpeed = Mathf.Clamp(_currentSpeed, 0, maxSpeed);
 
             // 3. Move the wall at the new current speed
-            transform.Translate(Vector3.right * currentSpeed * Time.deltaTime);
+            transform.Translate(Vector3.right * (_currentSpeed * Time.deltaTime));
     }
 
-    void OnTriggerEnter2D(Collider2D collision)
+    private void OnTriggerEnter2D(Collider2D collision)
     {
         if (collision.gameObject.layer == LayerMask.NameToLayer("Player"))
         {

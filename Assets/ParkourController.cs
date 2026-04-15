@@ -1,8 +1,8 @@
+        using System.Collections;
         using TMPro;
         using UnityEngine;
         using UnityEngine.UI; 
         using UnityEngine.InputSystem;
-        using UnityEngine.Serialization;
 
         public class ParkourController : MonoBehaviour
         {
@@ -11,16 +11,16 @@
             public Color normalColor = Color.blue;
             public Color stumbleColor = Color.red;
             public Color slideColor = Color.yellow; 
-            public Color crouchColor = new Color(1f, 0.5f, 0f); 
+            public Color crouchColor = new(1f, 0.5f, 0f); 
             
-            public bool isVaulting = false;
-            public bool isGrounded = false;
-            public bool isStumbling = false;
-            public bool isSliding = false;
-            public bool isCrouching = false;
+            public bool isVaulting;
+            public bool isGrounded;
+            public bool isStumbling;
+            public bool isSliding;
+            public bool isCrouching;
             
-            private float stumbleTimer = 1f;
-            private float lockedFacingDirection = 1f;
+            private float _stumbleTimer = 1f;
+            private float _lockedFacingDirection = 1f;
 
             [Header("Physics & Momentum")]
             public Rigidbody2D rb;
@@ -37,7 +37,7 @@
 
             [Header("Flow Mechanic")]
             public float maxFlowMeter = 100f;
-            [FormerlySerializedAs("currentShiftMeter")] public float currentFlowMeter = 100f; 
+            public float currentFlowMeter = 100f; 
             public float burstSpeedBonus = 8f; 
             public float burstCost = 30f;
             public float maxBurstActivationSpeed = 8f; 
@@ -52,7 +52,7 @@
             public float maxFlowRegen = 5f; // Max gain for hitting absolute max speed
             public float flowDecayRate = 50f; // Punishing decay when stopped
             public float flowDecaySpeedThreshold = 5f;
-            private float currentFlowRegenRate;
+            private float _currentFlowRegenRate;
 
             [Header("Raycast Data")]
             public Transform footPosition;
@@ -74,22 +74,24 @@
             [Header("UI & Feedback")]
             public TextMeshProUGUI actionText;
             public TextMeshProUGUI speedText;
-            public TextMeshProUGUI FlowCapacityText;
-            public TextMeshProUGUI FlowRateText;
-            [FormerlySerializedAs("shiftMeterFill")] public Image flowMeterFill;
+            public TextMeshProUGUI flowCapacityText;
+            public TextMeshProUGUI flowRateText;
+            public Image flowMeterFill;
             public float uiLerpSpeed = 10f; // New variable for the smooth UI transition
             private Coroutine _currentTextCoroutine;
+            private Collider2D _collider2D;
 
             // ==========================================
             // 1. UNITY LIFECYCLE
             // ==========================================
-            void Start()
+            private void Start()
             {
+                _collider2D = GetComponent<Collider2D>();
                 if (cubeSprite == null) cubeSprite = GetComponent<SpriteRenderer>(); 
                 if (cubeSprite != null) cubeSprite.color = normalColor;
             }
 
-            void OnEnable()
+            private void OnEnable()
             {
                 moveAction.action.Enable();
                 jumpAction.action.Enable();
@@ -102,7 +104,7 @@
                 flowAction.action.performed += OnFlowBurst; 
             }
 
-            void OnDisable()
+            private void OnDisable()
             {
                 moveAction.action.Disable();
                 jumpAction.action.Disable();
@@ -115,7 +117,7 @@
                 flowAction.action.performed -= OnFlowBurst;
             }
 
-            void Update()
+            private void Update()
             {
                 CheckGrounded();
                     
@@ -142,13 +144,13 @@
             // ==========================================
             // 2. CORE STATE LOGIC & MOMENTUM
             // ==========================================
-            void CheckGrounded()
+            private void CheckGrounded()
             {
                 RaycastHit2D hit = Physics2D.Raycast(footPosition.position, Vector2.down, groundCheckDistance, groundLayer);
-                isGrounded = hit.collider != null;
+                isGrounded = hit.collider ;
             }
 
-            void HandleUI()
+            private void HandleUI()
             {
                 if (flowMeterFill)
                 {
@@ -168,28 +170,26 @@
                     speedText.color = Color.Lerp(Color.white, Color.cyan, colorRatio);
                 }
                 
-                if (FlowCapacityText)
-                {
-                    FlowCapacityText.text = currentFlowMeter.ToString("F0") + " / " + maxFlowMeter.ToString("F0");
-                }
+                if (flowCapacityText) flowCapacityText.text = currentFlowMeter.ToString("F0") + " / " + maxFlowMeter.ToString("F0");
+                
 
-                if (FlowRateText)
+                if (flowRateText)
                 {
                     // FIX: Now it ONLY shows if the rate is strictly positive.
-                    if (currentFlowRegenRate > 0.01f) 
+                    if (_currentFlowRegenRate > 0.01f) 
                     {
-                        FlowRateText.gameObject.SetActive(true);
-                        FlowRateText.text = "+" + currentFlowRegenRate.ToString("F1") + " / sec";
+                        flowRateText.gameObject.SetActive(true);
+                        flowRateText.text = "+" + _currentFlowRegenRate.ToString("F1") + " / sec";
                     }
                     else
                     {
                         // Instantly hides itself if it is 0 or negative (decaying).
-                        FlowRateText.gameObject.SetActive(false);
+                        flowRateText.gameObject.SetActive(false);
                     }
                 }
             }
 
-            void HandleMovement()
+            private void HandleMovement()
             {
                 if (isVaulting || !isGrounded) return; 
 
@@ -203,7 +203,7 @@
                 Vector2 moveVector = moveAction.action.ReadValue<Vector2>();
                 float targetSpeed = 0f;
 
-                // Use Abs to create a deadzone, ignoring tiny stick drifts
+                // Use Abs to create a dead zone, ignoring tiny stick drifts
                 if (Mathf.Abs(moveVector.x) > 0.1f) 
                 {
                     // FIX: Force the input to be exactly 1 or -1. No more diagonal 0.7 slowdowns.
@@ -218,7 +218,7 @@
                 if (Mathf.Abs(moveVector.x) > 0.1f)
                 {
                     float accelToUse = accelerationRate;
-                    if (Mathf.Sign(moveVector.x) != Mathf.Sign(currentVelocityX) && Mathf.Abs(currentVelocityX) > 0.5f)
+                    if (!Mathf.Approximately(Mathf.Sign(moveVector.x), Mathf.Sign(currentVelocityX)) && Mathf.Abs(currentVelocityX) > 0.5f)
                     {
                         accelToUse *= turnaroundMultiplier; 
                     }
@@ -233,7 +233,7 @@
                 rb.linearVelocity = new Vector2(currentVelocityX, rb.linearVelocity.y);
             }
 
-            void HandleCrouchAndSlide()
+            private void HandleCrouchAndSlide()
             {
                 if (!isGrounded || isVaulting || isStumbling) return;
 
@@ -264,22 +264,22 @@
                 }
             }
 
-            void HandleStumbleDeceleration()
+            private void HandleStumbleDeceleration()
             {
-                stumbleTimer -= Time.deltaTime;
+                _stumbleTimer -= Time.deltaTime;
                 
-                float speedMultiplier = Mathf.Clamp01(stumbleTimer / 3f); 
-                rb.linearVelocity = new Vector2(lockedFacingDirection * topSpeed * speedMultiplier, rb.linearVelocity.y);
+                float speedMultiplier = Mathf.Clamp01(_stumbleTimer / 3f); 
+                rb.linearVelocity = new Vector2(_lockedFacingDirection * topSpeed * speedMultiplier, rb.linearVelocity.y);
 
-                if (stumbleTimer <= 0f)
+                if (_stumbleTimer <= 0f)
                 {
                     isStumbling = false;
-                    if (cubeSprite != null) cubeSprite.color = normalColor;
+                    if (cubeSprite) cubeSprite.color = normalColor;
                     DisplayAction("RECOVERED", Color.white);
                 }
             }
 
-            void HandlePassiveStumble()
+            private void HandlePassiveStumble()
             {
                 if (isVaulting || !isGrounded || isStumbling || parkourAction.action.IsPressed()) return;
 
@@ -288,7 +288,7 @@
                 
                 RaycastHit2D hit = Physics2D.Raycast(originPos, fireDirection, 1f, obstacleLayer);
                 
-                if (hit.collider != null && hit.collider.bounds.size.y < 0.6f)
+                if (hit.collider && hit.collider.bounds.size.y < 0.6f)
                 {
                     float armorCost = 50f; 
                     
@@ -297,7 +297,7 @@
                         // PROTECTED: Eat the meter, flash UI, and do a normal Speed Step
                         currentFlowMeter -= armorCost;
                         DisplayAction("STUMBLE PROTECTED!", Color.cyan);
-                        if (cubeSprite != null) cubeSprite.color = Color.cyan;
+                        if (cubeSprite) cubeSprite.color = Color.cyan;
                         
                         // Route directly to the VaultRoutine (0.2s duration, 0.1f height)
                         StartCoroutine(VaultRoutine(hit.collider, 0.2f, 0.1f)); 
@@ -313,7 +313,7 @@
             // ==========================================
             // 3. INPUT TRIGGERS & FLOW
             // ==========================================
-            void OnFlowBurst(InputAction.CallbackContext context)
+            private void OnFlowBurst(InputAction.CallbackContext context)
             {
                 if (!isGrounded || isVaulting || isStumbling || isSliding || isCrouching) return;
 
@@ -333,7 +333,7 @@
                 }
             }
 
-            void OnJump(InputAction.CallbackContext context)
+            private void OnJump(InputAction.CallbackContext context)
             {
                 if (!isGrounded || isVaulting || isStumbling || isSliding || isCrouching) return;
 
@@ -350,13 +350,13 @@
                 rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
             }
 
-            void HandleParkourHold()
+            private void HandleParkourHold()
             {
                 if (isVaulting || !isGrounded || isStumbling) return; 
                 if (parkourAction.action.IsPressed()) FireRaycast(false);
             }
 
-            void OnTrickTap(InputAction.CallbackContext context)
+            private void OnTrickTap(InputAction.CallbackContext context)
             {
                 if (isVaulting || !isGrounded || isStumbling) return; 
                 
@@ -366,7 +366,7 @@
                 FireRaycast(true);
             }
 
-            bool FireRaycast(bool isTricking)
+            private bool FireRaycast(bool isTricking)
             {
                 if (!isGrounded) return false; 
 
@@ -375,7 +375,7 @@
                 
                 RaycastHit2D hit = Physics2D.Raycast(originPos, fireDirection, rayDistance, obstacleLayer);
 
-                if (hit.collider != null) 
+                if (hit.collider) 
                 {
                     Calculate(hit.collider, isTricking);
                     return true; // We hit something and started a parkour move
@@ -383,8 +383,8 @@
                 
                 return false; // Thin air
             }
-            
-            void HandleFlowEconomy()
+
+            private void HandleFlowEconomy()
             {
                 float currentAbsSpeed = Mathf.Abs(rb.linearVelocity.x);
                 float currentFlowRatio = currentFlowMeter / maxFlowMeter;
@@ -396,8 +396,8 @@
                 // 2. DECAY VS GROWTH
                 if (currentAbsSpeed < flowDecaySpeedThreshold && isGrounded && !isVaulting)
                 {
-                    currentFlowRegenRate = -flowDecayRate;
-                    currentFlowMeter += currentFlowRegenRate * Time.deltaTime;
+                    _currentFlowRegenRate = -flowDecayRate;
+                    currentFlowMeter += _currentFlowRegenRate * Time.deltaTime;
                 }
                 else if (currentAbsSpeed >= flowDecaySpeedThreshold)
                 {
@@ -407,13 +407,13 @@
                     float speedRatio = Mathf.InverseLerp(minTopSpeed, maxTopSpeed, currentAbsSpeed);
                     
                     // This perfectly maps 0 ratio to minRegen (1), and 1 ratio to maxRegen (5).
-                    currentFlowRegenRate = Mathf.Lerp(minFlowRegen, maxFlowRegen, speedRatio);
+                    _currentFlowRegenRate = Mathf.Lerp(minFlowRegen, maxFlowRegen, speedRatio);
                     
-                    currentFlowMeter += currentFlowRegenRate * Time.deltaTime;
+                    currentFlowMeter += _currentFlowRegenRate * Time.deltaTime;
                 }
                 else 
                 {
-                    currentFlowRegenRate = 0f;
+                    _currentFlowRegenRate = 0f;
                 }
 
                 currentFlowMeter = Mathf.Clamp(currentFlowMeter, 0f, maxFlowMeter);
@@ -422,7 +422,7 @@
             // ==========================================
             // 4. ACTION EXECUTION
             // ==========================================
-        void Calculate(Collider2D obstacle, bool isTricking)
+            private void Calculate(Collider2D obstacle, bool isTricking)
         {
             float obstacleHeight = obstacle.bounds.size.y;
             float obstacleClearance = obstacle.bounds.size.x;
@@ -451,66 +451,67 @@
                 return;
             }
 
-            // 4. THE PARKOUR DECISION TREE (Moving > 1.5f Speed)
-            if (obstacleHeight < 0.6f)
+            switch (obstacleHeight)
             {
-                // Tiny objects: Step / Hop
-                float duration = isTricking ? 0.4f : 0.2f;
-                DisplayAction(isTricking ? "TRICK HOP!" : "SPEED STEP!", isTricking ? Color.cyan : Color.white);
-                StartCoroutine(VaultRoutine(obstacle, duration, 0.1f)); 
-            }
-            else if (obstacleHeight <= 1.5f)
-            {
+                // 4. THE PARKOUR DECISION TREE (Moving > 1.5f Speed)
+                case < 0.6f:
+                {
+                    // Tiny objects: Step / Hop
+                    float duration = isTricking ? 0.4f : 0.2f;
+                    DisplayAction(isTricking ? "TRICK HOP!" : "SPEED STEP!", isTricking ? Color.cyan : Color.white);
+                    StartCoroutine(VaultRoutine(obstacle, duration, 0.1f));
+                    break;
+                }
                 // Medium objects (up to chest height): Vault or Kong
-                if (obstacleClearance <= 1.5f)
+                case <= 1.5f when obstacleClearance <= 1.5f:
                 {
                     float duration = isTricking ? 0.7f : 0.3f;
                     DisplayAction(isTricking ? "TRICK VAULT!" : "SPEED VAULT!", isTricking ? Color.cyan : Color.white);
                     StartCoroutine(VaultRoutine(obstacle, duration, 1.0f));
+                    break;
                 }
-                else if (obstacleClearance <= 3.0f)
+                case <= 1.5f when obstacleClearance <= 3.0f:
                 {
                     float duration = isTricking ? 0.8f : 0.4f;
                     DisplayAction(isTricking ? "TRICK KONG!" : "SPEED KONG!", isTricking ? Color.cyan : Color.white);
-                    StartCoroutine(VaultRoutine(obstacle, duration, 1.5f)); 
+                    StartCoroutine(VaultRoutine(obstacle, duration, 1.5f));
+                    break;
                 }
-                else
-                {
+                case <= 1.5f:
                     // Short enough to vault, but too long to clear. Climb on top.
                     DisplayAction("Climb!", Color.white);
                     StartCoroutine(MantleRoutine(obstacle));
-                }
-            }
-            else 
-            {
-                // Tall objects (Height is > 1.5f and <= 4.0f): Forced Climb
-                // Prevents flying speed-vaults over tall fences/pillars
-                DisplayAction("Climb!", Color.white);
-                StartCoroutine(MantleRoutine(obstacle));
+                    break;
+                default:
+                    // Tall objects (Height is > 1.5f and <= 4.0f): Forced Climb
+                    // Prevents flying speed-vaults over tall fences/pillars
+                    DisplayAction("Climb!", Color.white);
+                    StartCoroutine(MantleRoutine(obstacle));
+                    break;
             }
         }
 
-            void Springboard()
+            private void Springboard()
             {
                 DisplayAction("SPRINGBOARD!", Color.white);
                 rb.linearVelocity = new Vector2(rb.linearVelocity.x, springboardForce);
             }
 
-            void StartSlide()
+            private void StartSlide()
             {
                 isSliding = true;
                 DisplayAction("SLIDE!", slideColor);
                 ApplyDownVisuals(slideColor);
             }
 
-            void StartCrouch()
+            private void StartCrouch()
             {
                 isCrouching = true;
                 DisplayAction("CROUCH!", crouchColor);
                 ApplyDownVisuals(crouchColor);
             }
 
-            void TransitionToCrouch()
+            private void TransitionToCrouch()
             {
                 isSliding = false;
                 isCrouching = true;
@@ -518,24 +519,24 @@
                 ApplyDownVisuals(crouchColor);
             }
 
-            void StandUp()
+            private void StandUp()
             {
                 isSliding = false;
                 isCrouching = false;
                 transform.localScale = new Vector3(1f, 2f, 1f); 
-                if (cubeSprite != null) cubeSprite.color = normalColor;
+                if (cubeSprite) cubeSprite.color = normalColor;
             }
 
             void ApplyDownVisuals(Color stateColor)
             {
                 transform.localScale = new Vector3(1f, 1f, 1f); 
-                if (cubeSprite != null) cubeSprite.color = stateColor;
+                if (cubeSprite) cubeSprite.color = stateColor;
             }
 
             // ==========================================
             // 5. COROUTINES
             // ==========================================
-            System.Collections.IEnumerator VaultRoutine(Collider2D obstacle, float duration, float extraHeight)
+            private IEnumerator VaultRoutine(Collider2D obstacle, float duration, float extraHeight)
             {
                 isVaulting = true;
             
@@ -543,13 +544,13 @@
             
                 rb.bodyType = RigidbodyType2D.Kinematic; 
                 rb.linearVelocity = Vector2.zero;
-                GetComponent<Collider2D>().enabled = false; 
+                _collider2D.enabled = false; 
 
                 Vector2 startPos = transform.position;
             
                 // FIX: Added 0.25f clearance padding to ensure the player fully clears the obstacle's raycast zone
                 float clearancePadding = 0.25f;
-                float landX = facingDirection == 1 
+                float landX = Mathf.Approximately(facingDirection, 1) 
                     ? obstacle.bounds.max.x + (playerWidth / 2f) + clearancePadding 
                     : obstacle.bounds.min.x - (playerWidth / 2f) - clearancePadding;
                 
@@ -569,21 +570,21 @@
                     yield return new WaitForFixedUpdate();
                 }
 
-                GetComponent<Collider2D>().enabled = true; 
+                _collider2D.enabled = true; 
                 rb.bodyType = RigidbodyType2D.Dynamic; 
                 isVaulting = false;
             
                 rb.linearVelocity = new Vector2(entrySpeedX, rb.linearVelocity.y);
             
-                if (cubeSprite != null) cubeSprite.color = normalColor;
+                if (cubeSprite) cubeSprite.color = normalColor;
             }
 
-            System.Collections.IEnumerator MantleRoutine(Collider2D obstacle)
+            private IEnumerator MantleRoutine(Collider2D obstacle)
             {
                 isVaulting = true;
                 rb.bodyType = RigidbodyType2D.Kinematic; 
                 rb.linearVelocity = Vector2.zero;
-                GetComponent<Collider2D>().enabled = false;
+                _collider2D.enabled = false;
 
                 // --- 1. DYNAMIC DURATION CALCULATION ---
                 float obstacleHeight = obstacle.bounds.size.y;
@@ -596,7 +597,7 @@
 
                 // --- 2. TRAJECTORY SETUP ---
                 Vector2 startPos = transform.position;
-                float edgeX = facingDirection == 1 ? obstacle.bounds.min.x + (playerWidth / 2f) : obstacle.bounds.max.x - (playerWidth / 2f);
+                float edgeX = Mathf.Approximately(facingDirection, 1) ? obstacle.bounds.min.x + (playerWidth / 2f) : obstacle.bounds.max.x - (playerWidth / 2f);
                 float topY = obstacle.bounds.max.y + (playerWidth / 2f);
 
                 // Split the animation: 70% of the time is spent pulling UP, 30% is spent pushing FORWARD over the ledge.
@@ -633,29 +634,30 @@
                 }
 
                 // --- FINISH ---
-                GetComponent<Collider2D>().enabled = true;
+                _collider2D.enabled = true;
                 rb.bodyType = RigidbodyType2D.Dynamic; 
                 isVaulting = false;
             }
-            System.Collections.IEnumerator StumbleRoutine(Collider2D obstacle)
+
+            private IEnumerator StumbleRoutine(Collider2D obstacle)
             {
                 DisplayAction("STUMBLE!", stumbleColor);
                 isVaulting = true;
                 isStumbling = true;
                 
-                if (cubeSprite != null) cubeSprite.color = stumbleColor;
+                if (cubeSprite) cubeSprite.color = stumbleColor;
                 
                 rb.bodyType = RigidbodyType2D.Kinematic; 
                 
                 rb.linearVelocity = Vector2.zero;
-                GetComponent<Collider2D>().enabled = false;
+                _collider2D.enabled = false;
 
                 Vector2 startPos = transform.position;
-                float landX = facingDirection == 1 ? obstacle.bounds.max.x + (playerWidth / 2f) : obstacle.bounds.min.x - (playerWidth / 2f);
+                float landX = Mathf.Approximately(facingDirection, 1) ? obstacle.bounds.max.x + (playerWidth / 2f) : obstacle.bounds.min.x - (playerWidth / 2f);
                 Vector2 endPos = new Vector2(landX, startPos.y); 
 
                 float timePassed = 0f;
-                float duration = 0.4f; 
+                const float duration = 0.4f; 
 
                 while (timePassed < duration)
                 {
@@ -669,28 +671,28 @@
                     yield return new WaitForFixedUpdate();
                 }
 
-                GetComponent<Collider2D>().enabled = true;
+                _collider2D.enabled = true;
                 rb.bodyType = RigidbodyType2D.Dynamic; 
                 isVaulting = false;
-                lockedFacingDirection = facingDirection;
+                _lockedFacingDirection = facingDirection;
 
                 float speedRatio = Mathf.Abs(rb.linearVelocity.x) / topSpeed;
-                stumbleTimer = Mathf.Clamp(5f * speedRatio, 1f, 5f);
+                _stumbleTimer = Mathf.Clamp(5f * speedRatio, 1f, 5f);
             }
 
             // ==========================================
             // 6. UI FEEDBACK
             // ==========================================
-            public void DisplayAction(string text, Color color)
+            private void DisplayAction(string text, Color color)
             {
-                if (actionText == null) return;
+                if (!actionText) return;
                 
                 if (_currentTextCoroutine != null) StopCoroutine(_currentTextCoroutine);
                 
                 _currentTextCoroutine = StartCoroutine(ClearTextAfterDelay(text, color));
             }
 
-            System.Collections.IEnumerator ClearTextAfterDelay(string text, Color color)
+            private IEnumerator ClearTextAfterDelay(string text, Color color)
             {
                 actionText.text = text;
                 actionText.color = color;

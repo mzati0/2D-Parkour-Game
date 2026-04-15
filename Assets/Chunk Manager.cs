@@ -8,27 +8,27 @@ public class SimpleChunkManager : MonoBehaviour
     public float chunkLength = 20f; 
     public float spawnDistanceThreshold = 10f; // Spawns when you are 10 meters away from the edge
 
-    private float nextRightSpawnX = 20f; // First chunk spawns 20m to the right
-    private float nextLeftSpawnX = -20f; // First chunk spawns 20m to the left
+    private float _nextRightSpawnX = 20f; // First chunk spawns 20m to the right
+    private float _nextLeftSpawnX = -20f; // First chunk spawns 20m to the left
 
-    void Update()
+    private void Update()
     {
         // Check right side
-        if (player.position.x + spawnDistanceThreshold > nextRightSpawnX)
+        if (player.position.x + spawnDistanceThreshold > _nextRightSpawnX)
         {
-            SpawnChunk(nextRightSpawnX);
-            nextRightSpawnX += chunkLength; // Move the target 20m further right
+            SpawnChunk(_nextRightSpawnX);
+            _nextRightSpawnX += chunkLength; // Move the target 20m further right
         }
         
         // Check left side
-        if (player.position.x - spawnDistanceThreshold < nextLeftSpawnX)
+        if (player.position.x - spawnDistanceThreshold < _nextLeftSpawnX)
         {
-            SpawnChunk(nextLeftSpawnX);
-            nextLeftSpawnX -= chunkLength; // Move the target 20m further left
+            SpawnChunk(_nextLeftSpawnX);
+            _nextLeftSpawnX -= chunkLength; // Move the target 20m further left
         }
     }
 
-    void SpawnChunk(float xPos)
+    private void SpawnChunk(float xPos)
     {
         if (chunkPrefabs.Length == 0) return;
 

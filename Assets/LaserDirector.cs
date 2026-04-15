@@ -11,7 +11,7 @@ public class LaserDirector : MonoBehaviour
 
     private bool _laserActivated;
 
-    void Start()
+    private void Start()
     {
         // Ensure the laser is off when the game starts
         if (laserObject != null)
@@ -20,23 +20,17 @@ public class LaserDirector : MonoBehaviour
         }
     }
 
-    void Update()
+    private void Update()
     {
-        if (!_laserActivated && player != null)
+        if (_laserActivated || !player) return;
+        
+        // If player runs to the right and crosses the threshold
+        if (!(player.position.x > startThresholdX)) return;
+        _laserActivated = true;
+                
+        if (laserObject)
         {
-            // If player runs to the right and crosses the threshold
-            if (player.position.x > startThresholdX)
-            {
-                _laserActivated = true;
-                
-                if (laserObject != null)
-                {
-                    laserObject.SetActive(true);
-                }
-                
-                // Optional: Print a debug log so you know it triggered
-                Debug.Log("Player crossed threshold. Laser Activated!");
-            }
+            laserObject.SetActive(true);
         }
     }
 }

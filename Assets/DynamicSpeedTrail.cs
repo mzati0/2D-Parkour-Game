@@ -1,4 +1,3 @@
-using System;
 using UnityEngine;
 
 [RequireComponent(typeof(TrailRenderer))]
@@ -6,7 +5,7 @@ public class DynamicSpeedTrail : MonoBehaviour
 {
     [Header("References")]
     public Rigidbody2D rb;
-    private TrailRenderer trail;
+    private TrailRenderer _trail;
 
     [Header("Settings")]
     public float minSpeedForTrail = 8f; // The speed where the flow state "kicks in"
@@ -19,13 +18,13 @@ public class DynamicSpeedTrail : MonoBehaviour
         _parkourController = FindAnyObjectByType<ParkourController>();
     }
 
-    void Start()
+    private void Start()
     {
-        trail = GetComponent<TrailRenderer>();
-        trail.emitting = false;
+        _trail = GetComponent<TrailRenderer>();
+        _trail.emitting = false;
     }
 
-    void Update()
+    private void Update()
     {
         // Get absolute speed regardless of moving left or right
         float currentSpeed = Mathf.Abs(rb.linearVelocity.x);
@@ -33,17 +32,17 @@ public class DynamicSpeedTrail : MonoBehaviour
 
         if (currentSpeed >= minSpeedForTrail)
         {
-            trail.emitting = true;
+            _trail.emitting = true;
             
             // Communication Design: The faster you go, the longer the trail gets
             float speedRatio = Mathf.Clamp01((currentSpeed - minSpeedForTrail) / (maxSpeed - minSpeedForTrail));
-            trail.time = Mathf.Lerp(0.1f, 0.35f, speedRatio);
-            trail.startColor = Color.Lerp(Color.white, Color.cyan, flowRatio);
-            trail.endColor = new Color(trail.startColor.r, trail.startColor.g, trail.startColor.b, 0f); // Fade out alpha
+            _trail.time = Mathf.Lerp(0.1f, 0.35f, speedRatio);
+            _trail.startColor = Color.Lerp(Color.white, Color.cyan, flowRatio);
+            _trail.endColor = new Color(_trail.startColor.r, _trail.startColor.g, _trail.startColor.b, 0f); // Fade out alpha
         }
         else
         {
-            trail.emitting = false;
+            _trail.emitting = false;
         }
     }
 }
