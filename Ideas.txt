@@ -1,0 +1,27 @@
+- Faster acceleration and max speed based on flow
+- flow leaves you if you aren't moving (and still takes damage every time you stumble)
+- Desaturate or Vingete the game, make it go away based on flow
+
+
+- Other stuff
+	- THis requires new wait etc hitbox system but when you hit a ledge midair you should just barley make it, maybe do a slow vault, I think slow clumsy recovery esque
+	actions should be orange or something, other examples of flimsiness
+	- Check real like max run speed, and balance how easy it is to run fast, maybe manage what you can and can't do with slow speed	
+	- Make vaults and tricks at low speed differ to valuts and tricks at high speed,
+		- also with vaults, make valut speed be congruent with your move speed, if you have no speed 2km/h, you can't just do a quick vault which is like 10km/h and then go back to two, but also I think vaults at a low speed should not do anything. but on a game feel perspective, I worry holding the parkour button and it feeling like it does nothing, or maybe if there is no option for that button (like pressing the trick button at 0km/h while moving into an object) it will play a Wrong buzzer sound, and maybe the speedometer will shake and go red a lil sec (but that also implies that there is a minimum speed to do tricks? but also maybe I make that a thing? but also how do I then communicate that to the player?)
+
+So here's what I think, I made a Table/spreadsheet for sumbles at different heights and different speeds.
+
+I should do the same for vaults and tricks, X axis or columns should be the speed, the rows will the the length of the obstacle.
+(Since the character spearated by segments, Toes, shins waist.. maybe make like a spreadshet for how vaults are handles for shin high objects)
+
+will make the spreadsheet later but things to note are, if the player holds the parkour button at 0-5 speed, it will do a clamber over esque vualt, kind of like leaping over a wait high fence, but if they hold the parkour button on an object that is too long, like something that you'd normally kong vault, climb (mantle) it instead. think of it like, the faster your spead, the longer objects you can clear. (I have an idea, that at like max spead you can do a Long range vault(idk the name) like in vector or tetrun, the move is like the person jumps/steps up/springboards over the long obstacle soars throught the sky and like lands at the end of the obstacle but dismounts it?? cant explain)
+
+another thing to address is the jump button; in the situation i described (being at zero speed and moving right into an object) the players, natural instict is to try jump and move right, but then realise that they cant move in air, so end up jumping in place awkardly which looks unreal/unimmersive and wastes time, the laster catches up, as of writing this a solition I can think of is maybe just make the player vault instead of jumping even tho they pressed the jump button, becasue since holding right and jumping, vs staying still and jumping results in the same in place jump, it makes sense to just make them climb, cuz it's not removing the agency of jumping, the player will sitll jump in place if they aren't holding a direcetion.
+
+Also for an AI, im thinking of in general merging the jump button and the parkour butto, but one is a press input and one is a hold input, merging the two will make the parkour button instead of holding the button and doing parkout (assasins creed's hold R2 to parkour). they would have to time their input, otherwise pressing the vault button with no valutable, mantleable objects
+
+If an AI is reading this, this is a brain dump, inqure abt things that dont make sense so  Ican elaborate for you, questions very welcome
+
+
+P.S SPEAKING OF FENCES FENCES NOTE TO SELF MAKE THE MIN WIDTH OF OBSTACLES LIKE 0.1 SO WE CAN ADD VAULT TYPES SUCH AS HOP OVERS (basically jumping over a hurdle like trackstars doo)

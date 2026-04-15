@@ -2,6 +2,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI; 
 using UnityEngine.InputSystem;
+using UnityEngine.Serialization;
 
 public class ParkourController : MonoBehaviour
 {
@@ -34,14 +35,24 @@ public class ParkourController : MonoBehaviour
     public float playerWidth = 1f;
     public float slideDecelerationRate = 6f; 
 
-    [Header("Shift Mechanic")]
-    public float maxShiftMeter = 100f;
-    public float currentShiftMeter = 100f; 
-    public float passiveRegenRate = 15f; 
+    [Header("Flow Mechanic")]
+    public float maxFlowMeter = 100f;
+    [FormerlySerializedAs("currentShiftMeter")] public float currentFlowMeter = 100f; 
     public float burstSpeedBonus = 8f; 
     public float burstCost = 30f;
     public float maxBurstActivationSpeed = 8f; 
-    public InputActionReference shiftAction; 
+    public InputActionReference flowAction; 
+    
+    [Header("Flow Economy")]
+    public float minTopSpeed = 36f; // The sluggish speed at 0 Flow
+    public float maxTopSpeed = 45f; // The blazing speed at 100 Flow
+    public float minAcceleration = 8f;
+    public float maxAcceleration = 14f;
+    public float minFlowRegen = 1f; // Guaranteed gain just for moving
+    public float maxFlowRegen = 5f; // Max gain for hitting absolute max speed
+    public float flowDecayRate = 50f; // Punishing decay when stopped
+    public float flowDecaySpeedThreshold = 5f;
+    private float currentFlowRegenRate;
 
     [Header("Raycast Data")]
     public Transform footPosition;
@@ -52,7 +63,7 @@ public class ParkourController : MonoBehaviour
     public LayerMask groundLayer;
 
     [Header("Slide & Crouch Mechanics")]
-    public BoxCollider2D playerCollider;
+    public Collider2D playerCollider;
 
     [Header("Input Actions")]
     public InputActionReference moveAction;
@@ -61,10 +72,13 @@ public class ParkourController : MonoBehaviour
     public InputActionReference trickAction;
     
     [Header("UI & Feedback")]
-    public TMP_Text actionText;
-    public TMP_Text speedText; 
-    public Image shiftMeterFill; 
-    private Coroutine currentTextCoroutine;
+    public TextMeshProUGUI actionText;
+    public TextMeshProUGUI speedText;
+    public TextMeshProUGUI FlowCapacityText;
+    public TextMeshProUGUI FlowRateText;
+    [FormerlySerializedAs("shiftMeterFill")] public Image flowMeterFill;
+    public float uiLerpSpeed = 10f; // New variable for the smooth UI transition
+    private Coroutine _currentTextCoroutine;
 
     // ==========================================
     // 1. UNITY LIFECYCLE
@@ -81,11 +95,11 @@ public class ParkourController : MonoBehaviour
         jumpAction.action.Enable();
         parkourAction.action.Enable();
         trickAction.action.Enable();
-        shiftAction.action.Enable(); 
+        flowAction.action.Enable(); 
 
         jumpAction.action.performed += OnJump;
         trickAction.action.performed += OnTrickTap;
-        shiftAction.action.performed += OnShiftBurst; 
+        flowAction.action.performed += OnFlowBurst; 
     }
 
     void OnDisable()
@@ -94,11 +108,11 @@ public class ParkourController : MonoBehaviour
         jumpAction.action.Disable();
         parkourAction.action.Disable();
         trickAction.action.Disable();
-        shiftAction.action.Disable();
+        flowAction.action.Disable();
 
         jumpAction.action.performed -= OnJump;
         trickAction.action.performed -= OnTrickTap;
-        shiftAction.action.performed -= OnShiftBurst;
+        flowAction.action.performed -= OnFlowBurst;
     }
 
     void Update()
@@ -108,18 +122,21 @@ public class ParkourController : MonoBehaviour
         // Force stand up if airborne
         if (!isGrounded && (isSliding || isCrouching)) StandUp();
             
-        HandleShiftRegenAndUI(); 
 
         if (isStumbling && !isVaulting)
         {
             HandleStumbleDeceleration();
             return;
         }
+        
+        HandleFlowEconomy();
 
         HandleMovement();
         HandleCrouchAndSlide();
         HandlePassiveStumble();
         HandleParkourHold();
+        HandleUI(); 
+
     }
 
     // ==========================================
@@ -131,18 +148,44 @@ public class ParkourController : MonoBehaviour
         isGrounded = hit.collider != null;
     }
 
-    void HandleShiftRegenAndUI()
+    void HandleUI()
     {
-
-        if (shiftMeterFill != null)
+        if (flowMeterFill)
         {
-            shiftMeterFill.fillAmount = currentShiftMeter / maxShiftMeter;
+            float targetFill = currentFlowMeter / maxFlowMeter;
+            flowMeterFill.fillAmount = Mathf.Lerp(flowMeterFill.fillAmount, targetFill, Time.deltaTime * uiLerpSpeed);
         }
 
-        if (speedText != null)
+        if (speedText)
         {
-            float kph = Mathf.Abs(rb.linearVelocity.x) * 3.6f;
-            speedText.text = kph.ToString("F0") + " KM/H";
+            float trueSpeed = Mathf.Abs(rb.linearVelocity.x);
+            speedText.text = (trueSpeed*3).ToString("F0") + " Km/h"; 
+            
+            // FIX: Uses InverseLerp. 
+            // If speed is 9 or below, ratio is 0 (White). 
+            // If speed is 12, ratio is 1 (Cyan). 
+            float colorRatio = Mathf.InverseLerp(minTopSpeed, maxTopSpeed, trueSpeed);
+            speedText.color = Color.Lerp(Color.white, Color.cyan, colorRatio);
+        }
+        
+        if (FlowCapacityText)
+        {
+            FlowCapacityText.text = currentFlowMeter.ToString("F0") + " / " + maxFlowMeter.ToString("F0");
+        }
+
+        if (FlowRateText)
+        {
+            // FIX: Now it ONLY shows if the rate is strictly positive.
+            if (currentFlowRegenRate > 0.01f) 
+            {
+                FlowRateText.gameObject.SetActive(true);
+                FlowRateText.text = "+" + currentFlowRegenRate.ToString("F1") + " / sec";
+            }
+            else
+            {
+                // Instantly hides itself if it is 0 or negative (decaying).
+                FlowRateText.gameObject.SetActive(false);
+            }
         }
     }
 
@@ -160,10 +203,14 @@ public class ParkourController : MonoBehaviour
         Vector2 moveVector = moveAction.action.ReadValue<Vector2>();
         float targetSpeed = 0f;
 
-        if (moveVector.x != 0)
+        // Use Abs to create a deadzone, ignoring tiny stick drifts
+        if (Mathf.Abs(moveVector.x) > 0.1f) 
         {
-            targetSpeed = moveVector.x * (isCrouching ? topSpeed * crouchSpeedMultiplier : topSpeed);
-            facingDirection = moveVector.x > 0 ? 1f : -1f;
+            // FIX: Force the input to be exactly 1 or -1. No more diagonal 0.7 slowdowns.
+            float cleanDirection = Mathf.Sign(moveVector.x); 
+            
+            targetSpeed = cleanDirection * (isCrouching ? topSpeed * crouchSpeedMultiplier : topSpeed);
+            facingDirection = cleanDirection;
         }
 
         float currentVelocityX = rb.linearVelocity.x;
@@ -245,10 +292,10 @@ public class ParkourController : MonoBehaviour
         {
             float armorCost = 50f; 
             
-            if (currentShiftMeter >= armorCost)
+            if (currentFlowMeter >= armorCost)
             {
                 // PROTECTED: Eat the meter, flash UI, and do a normal Speed Step
-                currentShiftMeter -= armorCost;
+                currentFlowMeter -= armorCost;
                 DisplayAction("STUMBLE PROTECTED!", Color.cyan);
                 if (cubeSprite != null) cubeSprite.color = Color.cyan;
                 
@@ -264,9 +311,9 @@ public class ParkourController : MonoBehaviour
     }
 
     // ==========================================
-    // 3. INPUT TRIGGERS & SHIFT
+    // 3. INPUT TRIGGERS & FLOW
     // ==========================================
-    void OnShiftBurst(InputAction.CallbackContext context)
+    void OnFlowBurst(InputAction.CallbackContext context)
     {
         if (!isGrounded || isVaulting || isStumbling || isSliding || isCrouching) return;
 
@@ -276,10 +323,10 @@ public class ParkourController : MonoBehaviour
             return; 
         }
 
-        if (currentShiftMeter >= burstCost)
+        if (currentFlowMeter >= burstCost)
         {
-            currentShiftMeter -= burstCost;
-            DisplayAction("SHIFT BURST!", Color.white);
+            currentFlowMeter -= burstCost;
+            DisplayAction("FLOW BURST!", Color.white);
             
             float newSpeed = Mathf.Abs(rb.linearVelocity.x) + burstSpeedBonus;
             rb.linearVelocity = new Vector2(facingDirection * newSpeed, rb.linearVelocity.y);
@@ -304,8 +351,8 @@ public class ParkourController : MonoBehaviour
     {
         if (isVaulting || !isGrounded || isStumbling) return; 
         
-        // Add 10% to the meter (assuming max is 100)
-        currentShiftMeter = Mathf.Clamp(currentShiftMeter + 10f, 0, maxShiftMeter);
+        // Add 10% to the meter
+        currentFlowMeter = Mathf.Clamp(currentFlowMeter + 10f, 0, maxFlowMeter);
         
         FireRaycast(true);
     }
@@ -320,6 +367,41 @@ public class ParkourController : MonoBehaviour
         RaycastHit2D hit = Physics2D.Raycast(originPos, fireDirection, rayDistance, obstacleLayer);
 
         if (hit.collider != null) Calculate(hit.collider, isTricking);
+    }
+    
+    void HandleFlowEconomy()
+    {
+        float currentAbsSpeed = Mathf.Abs(rb.linearVelocity.x);
+        float currentFlowRatio = currentFlowMeter / maxFlowMeter;
+
+        // 1. DYNAMIC SPEED & ACCELERATION
+        topSpeed = Mathf.Lerp(minTopSpeed, maxTopSpeed, currentFlowRatio);
+        accelerationRate = Mathf.Lerp(minAcceleration, maxAcceleration, currentFlowRatio);
+
+        // 2. DECAY VS GROWTH
+        if (currentAbsSpeed < flowDecaySpeedThreshold && isGrounded && !isVaulting)
+        {
+            currentFlowRegenRate = -flowDecayRate;
+            currentFlowMeter += currentFlowRegenRate * Time.deltaTime;
+        }
+        else if (currentAbsSpeed >= flowDecaySpeedThreshold)
+        {
+            // GROWING
+            // FIX: The scale now officially starts at minTopSpeed (8), not 0.
+            // If speed is 8 or lower, ratio is 0. If max speed, ratio is 1.
+            float speedRatio = Mathf.InverseLerp(minTopSpeed, maxTopSpeed, currentAbsSpeed);
+            
+            // This perfectly maps 0 ratio to minRegen (1), and 1 ratio to maxRegen (5).
+            currentFlowRegenRate = Mathf.Lerp(minFlowRegen, maxFlowRegen, speedRatio);
+            
+            currentFlowMeter += currentFlowRegenRate * Time.deltaTime;
+        }
+        else 
+        {
+            currentFlowRegenRate = 0f;
+        }
+
+        currentFlowMeter = Mathf.Clamp(currentFlowMeter, 0f, maxFlowMeter);
     }
 
     // ==========================================
@@ -344,7 +426,7 @@ public class ParkourController : MonoBehaviour
             DisplayAction(isTricking ? "TRICK HOP!" : "SPEED STEP!", isTricking ? Color.cyan : Color.white);
             StartCoroutine(VaultRoutine(obstacle, duration, 0.1f)); 
         }
-        else if (obstacleHeight <= 2.0f)
+        else if (obstacleHeight <= 3.0f)
         {
             if (obstacleClearance <= 1.5f)
             {
@@ -417,7 +499,7 @@ public class ParkourController : MonoBehaviour
         
         float entrySpeedX = rb.linearVelocity.x;
         
-        rb.bodyType = RigidbodyType2D.Kinematic; // FIX: Replaced obsolete isKinematic
+        rb.bodyType = RigidbodyType2D.Kinematic; 
         rb.linearVelocity = Vector2.zero;
         GetComponent<Collider2D>().enabled = false; 
 
@@ -440,19 +522,18 @@ public class ParkourController : MonoBehaviour
         }
 
         GetComponent<Collider2D>().enabled = true; 
-        rb.bodyType = RigidbodyType2D.Dynamic; // FIX: Replaced obsolete isKinematic
+        rb.bodyType = RigidbodyType2D.Dynamic; 
         isVaulting = false;
         
         rb.linearVelocity = new Vector2(entrySpeedX, rb.linearVelocity.y);
         
-        // FIX: Ensure the player returns to normal color after a protected stumble (or any vault)
         if (cubeSprite != null) cubeSprite.color = normalColor;
     }
 
     System.Collections.IEnumerator MantleRoutine(Collider2D obstacle)
     {
         isVaulting = true;
-        rb.bodyType = RigidbodyType2D.Kinematic; // FIX
+        rb.bodyType = RigidbodyType2D.Kinematic; 
         rb.linearVelocity = Vector2.zero;
         GetComponent<Collider2D>().enabled = false;
 
@@ -461,7 +542,7 @@ public class ParkourController : MonoBehaviour
         Vector2 endPos = new Vector2(edgeX, obstacle.bounds.max.y + (playerWidth / 2f));
 
         float timePassed = 0f;
-        float duration = 0.25f; 
+        float duration = 0.75f; 
 
         while (timePassed < duration)
         {
@@ -475,7 +556,7 @@ public class ParkourController : MonoBehaviour
         }
 
         GetComponent<Collider2D>().enabled = true;
-        rb.bodyType = RigidbodyType2D.Dynamic; // FIX
+        rb.bodyType = RigidbodyType2D.Dynamic; 
         isVaulting = false;
     }
 
@@ -489,7 +570,6 @@ public class ParkourController : MonoBehaviour
         
         rb.bodyType = RigidbodyType2D.Kinematic; 
         
-        // Unprotected Stumble = Dead Stop
         rb.linearVelocity = Vector2.zero;
         GetComponent<Collider2D>().enabled = false;
 
@@ -517,7 +597,6 @@ public class ParkourController : MonoBehaviour
         isVaulting = false;
         lockedFacingDirection = facingDirection;
 
-        // Punishing recovery timer based on how fast you crashed
         float speedRatio = Mathf.Abs(rb.linearVelocity.x) / topSpeed;
         stumbleTimer = Mathf.Clamp(5f * speedRatio, 1f, 5f);
     }
@@ -529,9 +608,9 @@ public class ParkourController : MonoBehaviour
     {
         if (actionText == null) return;
         
-        if (currentTextCoroutine != null) StopCoroutine(currentTextCoroutine);
+        if (_currentTextCoroutine != null) StopCoroutine(_currentTextCoroutine);
         
-        currentTextCoroutine = StartCoroutine(ClearTextAfterDelay(text, color));
+        _currentTextCoroutine = StartCoroutine(ClearTextAfterDelay(text, color));
     }
 
     System.Collections.IEnumerator ClearTextAfterDelay(string text, Color color)
