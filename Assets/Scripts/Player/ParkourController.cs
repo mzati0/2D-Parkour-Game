@@ -2,6 +2,7 @@ using System.Collections;
 using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 namespace Player
@@ -90,12 +91,18 @@ namespace Player
         #region VARIABLES: UI & Feedback
         [Header("UI & Feedback")]
         public TextMeshProUGUI actionText;
-        public TextMeshProUGUI speedText;
+        public TextMeshProUGUI speedKmhText;
+        public TextMeshProUGUI speedUsText;
         public TextMeshProUGUI flowCapacityText;
         public TextMeshProUGUI flowRateText;
         public Image flowMeterFill;
         public float uiLerpSpeed = 10f; // New variable for the smooth UI transition
         private Coroutine _currentTextCoroutine;
+        #endregion
+
+        #region  VARIABLES: Debug
+        [Header("Debug")]
+        [SerializeField] private bool showUnits;
         #endregion
 
         #region 1. UNITY LIFECYCLE
@@ -626,14 +633,24 @@ namespace Player
                 flowMeterFill.fillAmount = Mathf.Lerp(flowMeterFill.fillAmount, targetFill, Time.deltaTime * uiLerpSpeed);
             }
 
-            if (speedText)
+            if (speedKmhText)
             {
                 float trueSpeed = Mathf.Abs(rb.linearVelocity.x);
-                speedText.text = (trueSpeed*3).ToString("F0") + " Km/h"; 
+                speedKmhText.text = (trueSpeed*3).ToString("F0") + " Km/h"; 
             
                 // FIX: Uses InverseLerp. 
                 float colorRatio = Mathf.InverseLerp(minTopSpeed, maxTopSpeed, trueSpeed);
-                speedText.color = Color.Lerp(Color.white, Color.cyan, colorRatio);
+                speedKmhText.color = Color.Lerp(Color.white, Color.cyan, colorRatio);
+            }
+
+            if (speedUsText && showUnits)
+            {
+                float trueSpeed = Mathf.Abs(rb.linearVelocity.x);
+                speedUsText.text = (trueSpeed).ToString("F0") + " U/s";
+                
+                // FIX: Uses InverseLerp. 
+                float colorRatio = Mathf.InverseLerp(minTopSpeed, maxTopSpeed, trueSpeed);
+                speedKmhText.color = Color.Lerp(Color.white, Color.cyan, colorRatio);
             }
         
             if (flowCapacityText) flowCapacityText.text = currentFlowMeter.ToString("F0") + " / " + maxFlowMeter.ToString("F0");

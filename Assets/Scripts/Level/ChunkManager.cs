@@ -5,6 +5,7 @@ namespace Level
     public class ChunkManager : MonoBehaviour
     {
         public Transform player;
+        public Transform parent;
         public GameObject[] chunkPrefabs; 
     
         public float chunkLength = 20f; 
@@ -36,7 +37,7 @@ namespace Level
 
             // Pick random prefab and drop it exactly at xPos
             int randomIndex = Random.Range(0, chunkPrefabs.Length);
-            Instantiate(chunkPrefabs[randomIndex], new Vector3(xPos, 0f, 0f), Quaternion.identity);
+            Instantiate(chunkPrefabs[randomIndex], new Vector3(xPos, 0f, 0f), Quaternion.identity).transform.SetParent(parent);
         }
     }
 }
