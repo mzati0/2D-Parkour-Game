@@ -12,14 +12,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 40e3692206bba8a48a40ccea8176d3c2, type: 3}
   m_Name: GaskellgamesSettings
   m_EditorClassIdentifier: Gaskellgames::Gaskellgames.GaskellgamesSettings_SO
-  showHubOnStartup: 0
+  showHubOnStartup: 1
   debugGgTrackedTasks: 1
   showPackageBanners: 1
   editorWindowBanner: 1
   componentBanner: 1
   showHierarchyBreadcrumbs: 1
   showHierarchyIcons: 1
-  limitIconCount: 0
+  limitIconCount: 1
   maxIconCount: 3
   showTransformTools: 1
   alignTools: 1

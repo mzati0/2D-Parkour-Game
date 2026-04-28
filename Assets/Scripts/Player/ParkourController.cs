@@ -67,25 +67,44 @@ namespace Player
         public float burstSpeedBonus = 8f; 
         public float burstCost = 30f;
         public float maxBurstActivationSpeed = 8f; 
-        public float minTopSpeed = 36f; // The sluggish speed at 0 Flow
-        public float maxTopSpeed = 45f; // The blazing speed at 100 Flow
+        public float minTopSpeed = 36f; 
+        public float maxTopSpeed = 45f; 
         public float minAcceleration = 8f;
         public float maxAcceleration = 14f;
-        public float minFlowRegen = 1f; // Guaranteed gain just for moving
-        public float maxFlowRegen = 5f; // Max gain for hitting absolute max speed
-        public float flowDecayRate = 50f; // Punishing decay when stopped
+        public float minFlowRegen = 1f; 
+        public float maxFlowRegen = 5f; 
+        public float flowDecayRate = 50f; 
         public float flowDecaySpeedThreshold = 5f;
         private float _currentFlowRegenRate;
         #endregion
 
-        #region VARIABLES: Raycast & Detection
-        [Header("Raycast Data")]
-        public Transform footPosition;
+        #region VARIABLES: Multi-Sensor Array (NEW)
+        [Header("Multi-Sensor Array")]
         public Transform headPosition; 
-        public float rayDistance = 2f;
+        public Transform chestPosition;
+        public Transform waistPosition; // Hips to Knees
+        public Transform shinPosition;  // Knees to Ankles
+        public Transform footPosition;  // The Toe
+
+        [Header("Sensor Dimensions")]
+        public Vector2 headBoxSize = new(0.2f, 0.2f);
+        public Vector2 chestBoxSize = new(0.2f, 0.3f);
+        public Vector2 waistBoxSize = new(0.2f, 0.3f);
+        public Vector2 shinBoxSize = new(0.2f, 0.3f);
+        public Vector2 toeBoxSize = new(0.2f, 0.1f);
+        public float sensorCastDistance = 2f;
         public float groundCheckDistance = 0.2f;
+        
         public LayerMask obstacleLayer;
         public LayerMask groundLayer;
+
+        // Internal Sensor Memory
+        private bool _isCollidingFront;
+        private RaycastHit2D _headHit;
+        private RaycastHit2D _chestHit;
+        private RaycastHit2D _waistHit;
+        private RaycastHit2D _shinHit;
+        private RaycastHit2D _toeHit;
         #endregion
     
         #region VARIABLES: UI & Feedback
@@ -96,7 +115,7 @@ namespace Player
         public TextMeshProUGUI flowCapacityText;
         public TextMeshProUGUI flowRateText;
         public Image flowMeterFill;
-        public float uiLerpSpeed = 10f; // New variable for the smooth UI transition
+        public float uiLerpSpeed = 10f; 
         private Coroutine _currentTextCoroutine;
         #endregion
 
@@ -142,8 +161,8 @@ namespace Player
         private void Update()
         {
             CheckGrounded();
+            ScanFrontObstacles(); // Always keep our nervous system updated
             
-            // Force stand up if airborne
             if (!isGrounded && (isSliding || isCrouching)) StandUp();
             
             if (isStumbling && !isVaulting)
@@ -168,25 +187,19 @@ namespace Player
 
             float moveInputX = moveAction.action.ReadValue<Vector2>().x;
 
-            // If holding a direction, try to use the existing parkour raycast first
             if (Mathf.Abs(moveInputX) > 0.1f)
             {
-                // If FireRaycast returns true, it found a wall and is handling it. Cancel the jump.
-                if (FireRaycast(false)) return; 
+                if (FireParkourAction(false)) return; 
             }
 
-            // STANDARD JUMP: Triggers if standing still, or if moving but no wall is present.
             rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
         }
 
         private void OnTrickTap(InputAction.CallbackContext context)
         {
             if (isVaulting || !isGrounded || isStumbling) return; 
-        
-            // Add 10% to the meter
             currentFlowMeter = Mathf.Clamp(currentFlowMeter + 10f, 0, maxFlowMeter);
-        
-            FireRaycast(true);
+            FireParkourAction(true);
         }
 
         private void OnFlowBurst(InputAction.CallbackContext context)
@@ -225,12 +238,9 @@ namespace Player
             Vector2 moveVector = moveAction.action.ReadValue<Vector2>();
             float targetSpeed = 0f;
 
-            // Use Abs to create a dead zone, ignoring tiny stick drifts
             if (Mathf.Abs(moveVector.x) > 0.1f) 
             {
-                // FIX: Force the input to be exactly 1 or -1. No more diagonal 0.7 slowdowns.
                 float cleanDirection = Mathf.Sign(moveVector.x); 
-            
                 targetSpeed = cleanDirection * (isCrouching ? topSpeed * crouchSpeedMultiplier : topSpeed);
                 facingDirection = cleanDirection;
             }
@@ -280,7 +290,6 @@ namespace Player
                 if (isSliding || isCrouching)
                 {
                     RaycastHit2D ceilingCheck = Physics2D.Raycast(footPosition.position, Vector2.up, 1.9f, obstacleLayer);
-                
                     if (!ceilingCheck.collider) StandUp(); 
                 }
             }
@@ -291,11 +300,9 @@ namespace Player
             float currentAbsSpeed = Mathf.Abs(rb.linearVelocity.x);
             float currentFlowRatio = currentFlowMeter / maxFlowMeter;
 
-            // 1. DYNAMIC SPEED & ACCELERATION
             topSpeed = Mathf.Lerp(minTopSpeed, maxTopSpeed, currentFlowRatio);
             accelerationRate = Mathf.Lerp(minAcceleration, maxAcceleration, currentFlowRatio);
 
-            // 2. DECAY VS GROWTH
             if (currentAbsSpeed < flowDecaySpeedThreshold && isGrounded && !isVaulting)
             {
                 _currentFlowRegenRate = -flowDecayRate;
@@ -303,14 +310,8 @@ namespace Player
             }
             else if (currentAbsSpeed >= flowDecaySpeedThreshold)
             {
-                // GROWING
-                // FIX: The scale now officially starts at minTopSpeed (8), not 0.
-                // If speed is 8 or lower, ratio is 0. If max speed, ratio is 1.
                 float speedRatio = Mathf.InverseLerp(minTopSpeed, maxTopSpeed, currentAbsSpeed);
-            
-                // This perfectly maps 0 ratio to minRegen (1), and 1 ratio to maxRegen (5).
                 _currentFlowRegenRate = Mathf.Lerp(minFlowRegen, maxFlowRegen, speedRatio);
-            
                 currentFlowMeter += _currentFlowRegenRate * Time.deltaTime;
             }
             else 
@@ -340,29 +341,20 @@ namespace Player
         {
             if (isVaulting || !isGrounded || isStumbling || parkourAction.action.IsPressed()) return;
 
-            Vector2 fireDirection = new Vector2(facingDirection, 0f);
-            Vector2 originPos = new Vector2(footPosition.position.x, footPosition.position.y + 0.02f);
-        
-            RaycastHit2D hit = Physics2D.Raycast(originPos, fireDirection, 1f, obstacleLayer);
-        
-            if (hit.collider && hit.collider.bounds.size.y < 0.6f)
+            // Using the new Toe Hit logic instead of the old raycast
+            if (_toeHit.collider && !_waistHit.collider)
             {
                 float armorCost = 50f; 
-            
                 if (currentFlowMeter >= armorCost)
                 {
-                    // PROTECTED: Eat the meter, flash UI, and do a normal Speed Step
                     currentFlowMeter -= armorCost;
                     DisplayAction("STUMBLE PROTECTED!", Color.cyan);
                     if (cubeSprite) cubeSprite.color = Color.cyan;
-                
-                    // Route directly to the VaultRoutine (0.2s duration, 0.1f height)
-                    StartCoroutine(VaultRoutine(hit.collider, 0.2f, 0.1f)); 
+                    StartCoroutine(VaultRoutine(_toeHit.collider, 0.2f, 0.1f)); 
                 }
                 else
                 {
-                    // UNPROTECTED: Suffer the real stumble
-                    StartCoroutine(StumbleRoutine(hit.collider));
+                    StartCoroutine(StumbleRoutine(_toeHit.collider));
                 }
             }
         }
@@ -370,90 +362,67 @@ namespace Player
         private void HandleParkourHold()
         {
             if (isVaulting || !isGrounded || isStumbling) return; 
-            if (parkourAction.action.IsPressed()) FireRaycast(false);
+            if (parkourAction.action.IsPressed()) FireParkourAction(false);
         }
         #endregion
 
-        #region 4. MECHANICS & CALCULATIONS
+       #region 4. MULTI-SENSOR SYSTEM & LOGIC (NEW)
         private void CheckGrounded()
         {
             RaycastHit2D hit = Physics2D.Raycast(footPosition.position, Vector2.down, groundCheckDistance, groundLayer);
             isGrounded = hit.collider;
         }
 
-        private bool FireRaycast(bool isTricking)
+        private void ScanFrontObstacles()
         {
-            if (!isGrounded) return false; 
+            if (!headPosition || !chestPosition || !waistPosition || !shinPosition || !footPosition) return;
 
             Vector2 fireDirection = new Vector2(facingDirection, 0f);
-            Vector2 originPos = new Vector2(footPosition.position.x, footPosition.position.y + 0.1f);
-        
-            RaycastHit2D hit = Physics2D.Raycast(originPos, fireDirection, rayDistance, obstacleLayer);
 
-            if (hit.collider) 
-            {
-                Calculate(hit.collider, isTricking);
-                return true; // We hit something and started a parkour move
-            }
-        
-            return false; // Thin air
+            _headHit = Physics2D.BoxCast(headPosition.position, headBoxSize, 0f, fireDirection, sensorCastDistance, obstacleLayer);
+            _chestHit = Physics2D.BoxCast(chestPosition.position, chestBoxSize, 0f, fireDirection, sensorCastDistance, obstacleLayer);
+            _waistHit = Physics2D.BoxCast(waistPosition.position, waistBoxSize, 0f, fireDirection, sensorCastDistance, obstacleLayer);
+            _shinHit = Physics2D.BoxCast(shinPosition.position, shinBoxSize, 0f, fireDirection, sensorCastDistance, obstacleLayer);
+            _toeHit = Physics2D.BoxCast(footPosition.position, toeBoxSize, 0f, fireDirection, sensorCastDistance, obstacleLayer);
+
+            _isCollidingFront = _headHit.collider || _chestHit.collider || _waistHit.collider || _shinHit.collider || _toeHit.collider;
         }
 
-        private void Calculate(Collider2D obstacle, bool isTricking)
+        private bool FireParkourAction(bool isTricking)
         {
-            float obstacleHeight = obstacle.bounds.size.y;
-            float obstacleClearance = obstacle.bounds.size.x;
+            if (!_isCollidingFront) return false; 
+            CalculateParkourMatrix(isTricking);
+            return true; 
+        }
+
+        private void CalculateParkourMatrix(bool isTricking)
+        {
             float inputY = moveAction.action.ReadValue<Vector2>().y;
 
-            // 1. ABSOLUTE HEIGHT LIMIT: Prevents climbing the Eiffel Tower
-            if (obstacleHeight > 4.0f) return;
-
-            // 2. ZERO-SPEED CLAMBER OVERRIDE
-            if (Mathf.Abs(rb.linearVelocity.x) < 1.5f && !isTricking)
+            // 1. TALL WALL: Chest/Head hits.
+            if (_chestHit.collider || _headHit.collider)
             {
                 DisplayAction("Climb!", Color.white);
-                StartCoroutine(MantleRoutine(obstacle));
-                return;
-            }
-        
-            // 3. SPRINGBOARD
-            if (inputY > 0.5f && !isTricking && obstacleHeight <= 1.0f)
-            {
-                Springboard();
+                StartCoroutine(MantleRoutine(_chestHit.collider ? _chestHit.collider : _headHit.collider));
                 return;
             }
 
-            switch (obstacleHeight)
+            // 2. VAULTABLE / TABLE: Waist hits, Chest is clear.
+            if (_waistHit.collider && !_chestHit.collider)
             {
-                case < 0.6f:
-                {
-                    float duration = isTricking ? 0.4f : 0.2f;
-                    DisplayAction(isTricking ? "TRICK HOP!" : "SPEED STEP!", isTricking ? Color.cyan : Color.white);
-                    StartCoroutine(VaultRoutine(obstacle, duration, 0.1f));
-                    break;
-                }
-                case <= 1.5f when obstacleClearance <= 1.5f:
-                {
-                    float duration = isTricking ? 0.7f : 0.3f;
-                    DisplayAction(isTricking ? "TRICK VAULT!" : "SPEED VAULT!", isTricking ? Color.cyan : Color.white);
-                    StartCoroutine(VaultRoutine(obstacle, duration, 1.0f));
-                    break;
-                }
-                case <= 1.5f when obstacleClearance <= 3.0f:
-                {
-                    float duration = isTricking ? 0.8f : 0.4f;
-                    DisplayAction(isTricking ? "TRICK KONG!" : "SPEED KONG!", isTricking ? Color.cyan : Color.white);
-                    StartCoroutine(VaultRoutine(obstacle, duration, 1.5f));
-                    break;
-                }
-                case <= 1.5f:
-                    DisplayAction("Climb!", Color.white);
-                    StartCoroutine(MantleRoutine(obstacle));
-                    break;
-                default:
-                    DisplayAction("Climb!", Color.white);
-                    StartCoroutine(MantleRoutine(obstacle));
-                    break;
+                float duration = isTricking ? 0.7f : 0.3f;
+                DisplayAction(isTricking ? "TRICK VAULT!" : "SPEED VAULT!", isTricking ? Color.cyan : Color.white);
+                StartCoroutine(VaultRoutine(_waistHit.collider, duration, 1.0f));
+                return;
+            }
+
+            // 3. LOW OBSTACLE: Shin or Toe hits, Waist is clear.
+            if ((_shinHit.collider || _toeHit.collider) && !_waistHit.collider)
+            {
+                float duration = isTricking ? 0.4f : 0.2f;
+                DisplayAction(isTricking ? "TRICK HOP!" : "SPEED STEP!", isTricking ? Color.cyan : Color.white);
+                StartCoroutine(VaultRoutine(_shinHit.collider ? _shinHit.collider : _toeHit.collider, duration, 0.1f));
+                return;
             }
         }
 
@@ -504,15 +473,12 @@ namespace Player
             _collider2D.enabled = false; 
 
             Vector2 startPos = transform.position;
-    
-            // FIX: Added 0.25f clearance padding to ensure the player fully clears the obstacle's raycast zone
             float clearancePadding = 0.25f;
             float landX = Mathf.Approximately(facingDirection, 1) 
                 ? obstacle.bounds.max.x + (playerWidth / 2f) + clearancePadding 
                 : obstacle.bounds.min.x - (playerWidth / 2f) - clearancePadding;
         
             Vector2 endPos = new Vector2(landX, startPos.y); 
-
             float heightToClear = (obstacle.bounds.max.y - startPos.y) + extraHeight;
             float timePassed = 0f;
 
@@ -531,7 +497,6 @@ namespace Player
             rb.bodyType = RigidbodyType2D.Dynamic; 
             isVaulting = false;
             rb.linearVelocity = new Vector2(entrySpeedX, rb.linearVelocity.y);
-    
             if (cubeSprite) cubeSprite.color = normalColor;
         }
 
@@ -542,12 +507,10 @@ namespace Player
             rb.linearVelocity = Vector2.zero;
             _collider2D.enabled = false;
 
-            // --- 1. DYNAMIC DURATION CALCULATION ---
             float obstacleHeight = obstacle.bounds.size.y;
             float heightRatio = Mathf.InverseLerp(1f, 4f, obstacleHeight);
             float totalDuration = Mathf.Lerp(0.3f, 1f, heightRatio);
 
-            // --- 2. TRAJECTORY SETUP ---
             Vector2 startPos = transform.position;
             float edgeX = Mathf.Approximately(facingDirection, 1) ? obstacle.bounds.min.x + (playerWidth / 2f) : obstacle.bounds.max.x - (playerWidth / 2f);
             float topY = obstacle.bounds.max.y + (playerWidth / 2f);
@@ -555,7 +518,6 @@ namespace Player
             float climbDuration = totalDuration * 0.7f;
             float pullDuration = totalDuration * 0.3f;
 
-            // --- PHASE 1: CLIMB UP ---
             float timePassed = 0f;
             while (timePassed < climbDuration)
             {
@@ -566,7 +528,6 @@ namespace Player
                 yield return new WaitForFixedUpdate();
             }
 
-            // --- PHASE 2: PULL FORWARD ---
             timePassed = 0f;
             Vector2 topPos = new Vector2(startPos.x, topY); 
         
@@ -578,7 +539,6 @@ namespace Player
                 yield return new WaitForFixedUpdate();
             }
 
-            // --- FINISH ---
             _collider2D.enabled = true;
             rb.bodyType = RigidbodyType2D.Dynamic; 
             isVaulting = false;
@@ -589,7 +549,6 @@ namespace Player
             DisplayAction("STUMBLE!", stumbleColor);
             isVaulting = true;
             isStumbling = true;
-        
             if (cubeSprite) cubeSprite.color = stumbleColor;
         
             rb.bodyType = RigidbodyType2D.Kinematic; 
@@ -624,7 +583,7 @@ namespace Player
         }
         #endregion
 
-        #region 6. UI & VISUALS
+        #region 6. UI, VISUALS & GIZMOS
         private void HandleUI()
         {
             if (flowMeterFill)
@@ -637,8 +596,6 @@ namespace Player
             {
                 float trueSpeed = Mathf.Abs(rb.linearVelocity.x);
                 speedKmhText.text = (trueSpeed*3).ToString("F0") + " Km/h"; 
-            
-                // FIX: Uses InverseLerp. 
                 float colorRatio = Mathf.InverseLerp(minTopSpeed, maxTopSpeed, trueSpeed);
                 speedKmhText.color = Color.Lerp(Color.white, Color.cyan, colorRatio);
             }
@@ -647,8 +604,6 @@ namespace Player
             {
                 float trueSpeed = Mathf.Abs(rb.linearVelocity.x);
                 speedUsText.text = (trueSpeed).ToString("F0") + " U/s";
-                
-                // FIX: Uses InverseLerp. 
                 float colorRatio = Mathf.InverseLerp(minTopSpeed, maxTopSpeed, trueSpeed);
                 speedKmhText.color = Color.Lerp(Color.white, Color.cyan, colorRatio);
             }
@@ -657,7 +612,6 @@ namespace Player
         
             if (flowRateText)
             {
-                // FIX: Now it ONLY shows if the rate is strictly positive.
                 if (_currentFlowRegenRate > 0.01f) 
                 {
                     flowRateText.gameObject.SetActive(true);
@@ -665,7 +619,6 @@ namespace Player
                 }
                 else
                 {
-                    // Instantly hides itself if it is 0 or negative (decaying).
                     flowRateText.gameObject.SetActive(false);
                 }
             }
@@ -680,9 +633,7 @@ namespace Player
         private void DisplayAction(string text, Color color)
         {
             if (!actionText) return;
-        
             if (_currentTextCoroutine != null) StopCoroutine(_currentTextCoroutine);
-        
             _currentTextCoroutine = StartCoroutine(ClearTextAfterDelay(text, color));
         }
 
@@ -692,6 +643,30 @@ namespace Player
             actionText.color = color;
             yield return new WaitForSeconds(1.5f); 
             actionText.text = "";
+        }
+
+        // --- CORRECTED: IN-GAME RAYCAST VISUALIZER ---
+        private void OnDrawGizmos()
+        {
+            if (!headPosition || !chestPosition || !waistPosition || !shinPosition || !footPosition) return;
+
+            // BoxCast sweeps a box over a distance. To draw the full area being checked, 
+            // we stretch the Gizmo cube's X size by the cast distance, and push its center forward by half the distance.
+            Vector3 offset = new Vector3(facingDirection * (sensorCastDistance / 2f), 0f, 0f);
+
+            // Helper function to draw the sweep
+            void DrawSweep(Transform t, Vector2 size, RaycastHit2D hit)
+            {
+                Gizmos.color = hit.collider ? Color.red : Color.green;
+                Vector3 sweepSize = new Vector3(size.x + sensorCastDistance, size.y, 0f);
+                Gizmos.DrawWireCube(t.position + offset, sweepSize);
+            }
+
+            DrawSweep(headPosition, headBoxSize, _headHit);
+            DrawSweep(chestPosition, chestBoxSize, _chestHit);
+            DrawSweep(waistPosition, waistBoxSize, _waistHit);
+            DrawSweep(shinPosition, shinBoxSize, _shinHit);
+            DrawSweep(footPosition, toeBoxSize, _toeHit);
         }
         #endregion
     }
