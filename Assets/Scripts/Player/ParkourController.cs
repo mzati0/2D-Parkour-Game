@@ -12,9 +12,9 @@ namespace Player
         #region VARIABLES: Core & Components
         [Header("Core Components")]
         public Rigidbody2D rb;
-        public Collider2D playerCollider;
         public SpriteRenderer cubeSprite;
-        private Collider2D _collider2D;
+        private CapsuleCollider2D _capsuleCollider2D;
+        [SerializeField] private GameObject sprites;
         #endregion
 
         #region VARIABLES: Input Actions
@@ -127,7 +127,7 @@ namespace Player
         #region 1. UNITY LIFECYCLE
         private void Start()
         {
-            _collider2D = GetComponent<Collider2D>();
+            _capsuleCollider2D = GetComponent<CapsuleCollider2D>();
             if (cubeSprite == null) cubeSprite = GetComponent<SpriteRenderer>(); 
             if (cubeSprite) cubeSprite.color = normalColor;
         }
@@ -458,7 +458,10 @@ namespace Player
         {
             isSliding = false;
             isCrouching = false;
-            transform.localScale = new Vector3(1f, 2f, 1f); 
+            _capsuleCollider2D.offset = new Vector2(0, 1f);
+            _capsuleCollider2D.size = new Vector2(1f, 2f);
+            sprites.transform.localPosition = Vector3.zero;
+            sprites.transform.localRotation = Quaternion.Euler(0f, 0f, 0f);
             if (cubeSprite) cubeSprite.color = normalColor;
         }
         #endregion
@@ -470,7 +473,7 @@ namespace Player
             float entrySpeedX = rb.linearVelocity.x;
             rb.bodyType = RigidbodyType2D.Kinematic; 
             rb.linearVelocity = Vector2.zero;
-            _collider2D.enabled = false; 
+            _capsuleCollider2D.enabled = false; 
 
             Vector2 startPos = transform.position;
             float clearancePadding = 0.25f;
@@ -493,7 +496,7 @@ namespace Player
                 yield return new WaitForFixedUpdate();
             }
 
-            _collider2D.enabled = true; 
+            _capsuleCollider2D.enabled = true; 
             rb.bodyType = RigidbodyType2D.Dynamic; 
             isVaulting = false;
             rb.linearVelocity = new Vector2(entrySpeedX, rb.linearVelocity.y);
@@ -505,7 +508,7 @@ namespace Player
             isVaulting = true;
             rb.bodyType = RigidbodyType2D.Kinematic; 
             rb.linearVelocity = Vector2.zero;
-            _collider2D.enabled = false;
+            _capsuleCollider2D.enabled = false;
 
             float obstacleHeight = obstacle.bounds.size.y;
             float heightRatio = Mathf.InverseLerp(1f, 4f, obstacleHeight);
@@ -539,7 +542,7 @@ namespace Player
                 yield return new WaitForFixedUpdate();
             }
 
-            _collider2D.enabled = true;
+            _capsuleCollider2D.enabled = true;
             rb.bodyType = RigidbodyType2D.Dynamic; 
             isVaulting = false;
         }
@@ -553,7 +556,7 @@ namespace Player
         
             rb.bodyType = RigidbodyType2D.Kinematic; 
             rb.linearVelocity = Vector2.zero;
-            _collider2D.enabled = false;
+            _capsuleCollider2D.enabled = false;
 
             Vector2 startPos = transform.position;
             float landX = Mathf.Approximately(facingDirection, 1) ? obstacle.bounds.max.x + (playerWidth / 2f) : obstacle.bounds.min.x - (playerWidth / 2f);
@@ -573,7 +576,7 @@ namespace Player
                 yield return new WaitForFixedUpdate();
             }
 
-            _collider2D.enabled = true;
+            _capsuleCollider2D.enabled = true;
             rb.bodyType = RigidbodyType2D.Dynamic; 
             isVaulting = false;
             _lockedFacingDirection = facingDirection;
@@ -626,7 +629,11 @@ namespace Player
 
         private void ApplyDownVisuals(Color stateColor)
         {
-            transform.localScale = new Vector3(1f, 1f, 1f); 
+            transform.localScale = new Vector3(1f, 1f, 1f);
+            _capsuleCollider2D.offset = new Vector2(0f, 0.5f);
+            _capsuleCollider2D.size = new Vector2(0.5f, 1f);
+            sprites.transform.localPosition = new Vector3(1f, 0f, 0f);
+            sprites.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
             if (cubeSprite) cubeSprite.color = stateColor;
         }
 
