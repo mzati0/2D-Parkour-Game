@@ -35,6 +35,10 @@ namespace Player
         public bool isCrouching;
         public bool isHanging;
         private Collider2D _currentLedge;
+        public bool isScrambling;
+        private bool _hasScrambled; // NEW: Prevents infinite scaling
+        public bool isWallSliding;
+        public bool isWallJumping;
 
         [Header("State Colors")]
         public Color normalColor = Color.blue;
@@ -55,7 +59,14 @@ namespace Player
         public float crouchSpeedMultiplier = 0.5f; 
         public float slideDecelerationRate = 6f; 
         public float jumpForce = 20f;
+        public float airControlMultiplier = 0.5f; // Half acceleration in the air
         public float springboardForce = 25f;
+        [Header("Wall Movement")]
+        public float wallScrambleSpeed = 12f;
+        public float wallScrambleDuration = 0.35f;
+        public float wallSlideSpeed = 4f;
+        public float wallJumpForceX = 10f;
+        public float wallJumpForceY = 18f;
     
         [Header("Spatial Data")]
         public float facingDirection = 1f;
@@ -95,6 +106,7 @@ namespace Player
         public Vector2 shinBoxSize = new(0.2f, 0.3f);
         public Vector2 toeBoxSize = new(0.2f, 0.1f);
         public float sensorCastDistance = 2f;
+        public float wallContactThreshold = 1f; // How close the wall must be to physically touch it
         public float groundCheckDistance = 0.2f;
         
         public LayerMask obstacleLayer;
@@ -163,7 +175,9 @@ namespace Player
         private void Update()
         {
             CheckGrounded();
-            ScanFrontObstacles(); // Always keep our nervous system updated
+            ScanFrontObstacles(); 
+            
+            if (!isGrounded && (isSliding || isCrouching)) StandUp();
             
             if (isHanging)
             {
@@ -171,10 +185,11 @@ namespace Player
                 return; // Skips all movement and gravity logic while on the wall
             }
 
+            // Airborne Wall Interactions
+            CheckWallScramble();
+            HandleWallSlide();
             CheckAirborneLedgeGrab();
-            
-            if (!isGrounded && (isSliding || isCrouching)) StandUp();
-            
+
             if (isStumbling && !isVaulting)
             {
                 HandleStumbleDeceleration();
@@ -193,12 +208,38 @@ namespace Player
         #region 2. INPUT HANDLERS
         private void OnJump(InputAction.CallbackContext context)
         {
-            if (!isGrounded || isVaulting || isStumbling || isSliding || isCrouching) return;
+            if (isVaulting || isStumbling || isSliding || isCrouching || isHanging) return;
 
-            float moveInputX = moveAction.action.ReadValue<Vector2>().x;
+            // Calculate strict physical touch, not just awareness
+            bool touchingWall = (_headHit.collider && _headHit.distance <= wallContactThreshold) || 
+                                (_chestHit.collider && _chestHit.distance <= wallContactThreshold) || 
+                                (_waistHit.collider && _waistHit.distance <= wallContactThreshold);
 
-            if (Mathf.Abs(moveInputX) > 0.1f)
+            Vector2 moveInput = moveAction.action.ReadValue<Vector2>();
+            bool holdingForward = Mathf.Abs(moveInput.x) > 0.1f && Mathf.Approximately(Mathf.Sign(moveInput.x), facingDirection);
+            bool holdingUp = moveInput.y > 0.5f;
+
+            // 1. STANDSTILL SCRAMBLE: Grounded, hugging wall, holding Up + Forward
+            if (isGrounded && touchingWall && holdingForward && holdingUp)
             {
+                _hasScrambled = true; 
+                StartCoroutine(WallScrambleRoutine());
+                return;
+            }
+
+            // 2. STRICT WALL JUMP: Must be physically touching, not just aware
+            if (isScrambling || isWallSliding || (!isGrounded && touchingWall))
+            {
+                PerformWallJump();
+                return;
+            }
+
+            // 3. STANDARD GROUNDED JUMP & PARKOUR
+            if (!isGrounded) return; 
+
+            if (Mathf.Abs(moveInput.x) > 0.1f)
+            {
+                // If FireParkourAction returns false, the jump won't be eaten!
                 if (FireParkourAction(false)) return; 
             }
 
@@ -234,9 +275,14 @@ namespace Player
         #endregion
 
         #region 3. CORE UPDATE LOGIC
-        private void HandleMovement()
+private void HandleMovement()
         {
-            if (isVaulting || !isGrounded) return; 
+            // Removed !isGrounded from this early return
+            if (isVaulting || isHanging || isScrambling || isWallSliding) return; 
+
+            // If we wall jumped, lock horizontal steering completely until we land or grab something.
+            // Gravity still affects Y, but X remains locked to the Wall Jump force.
+            if (isWallJumping) return;
 
             if (isSliding)
             {
@@ -260,6 +306,8 @@ namespace Player
             if (Mathf.Abs(moveVector.x) > 0.1f)
             {
                 float accelToUse = accelerationRate;
+                if (!isGrounded) accelToUse *= airControlMultiplier; // 50% acceleration in air
+
                 if (!Mathf.Approximately(Mathf.Sign(moveVector.x), Mathf.Sign(currentVelocityX)) && Mathf.Abs(currentVelocityX) > 0.5f)
                 {
                     accelToUse *= turnaroundMultiplier; 
@@ -269,7 +317,10 @@ namespace Player
             }
             else
             {
-                currentVelocityX = Mathf.MoveTowards(currentVelocityX, 0f, decelerationRate * Time.deltaTime);
+                // If you let go of the stick mid-air, you shouldn't magically hit the brakes.
+                // We only apply deceleration if you are on the ground.
+                float decelToUse = isGrounded ? decelerationRate : 0f; 
+                currentVelocityX = Mathf.MoveTowards(currentVelocityX, 0f, decelToUse * Time.deltaTime);
             }
 
             rb.linearVelocity = new Vector2(currentVelocityX, rb.linearVelocity.y);
@@ -303,6 +354,66 @@ namespace Player
                     if (!ceilingCheck.collider) StandUp(); 
                 }
             }
+        }
+        private void CheckWallScramble()
+        {
+            // Added _hasScrambled to the block list
+            if (isGrounded || isScrambling || isVaulting || isHanging || _hasScrambled) return;
+
+            bool touchingWall = (_headHit.collider && _headHit.distance <= wallContactThreshold) || 
+                                (_chestHit.collider && _chestHit.distance <= wallContactThreshold) || 
+                                (_waistHit.collider && _waistHit.distance <= wallContactThreshold);
+
+            if (!touchingWall) return;
+
+            Vector2 moveInput = moveAction.action.ReadValue<Vector2>();
+            bool holdingForward = Mathf.Abs(moveInput.x) > 0.1f && Mathf.Approximately(Mathf.Sign(moveInput.x), facingDirection);
+            bool holdingUp = moveInput.y > 0.5f;
+
+            if (holdingForward && holdingUp)
+            {
+                _hasScrambled = true; // Lock it out for the rest of this jump
+                StartCoroutine(WallScrambleRoutine());
+            }
+        }
+
+        private void HandleWallSlide()
+        {
+            if (isGrounded || isScrambling || isVaulting || isHanging) 
+            {
+                isWallSliding = false;
+                return;
+            }
+
+            bool touchingWall = (_chestHit.collider && _chestHit.distance <= wallContactThreshold) || 
+                                (_waistHit.collider && _waistHit.distance <= wallContactThreshold);
+
+            Vector2 moveInput = moveAction.action.ReadValue<Vector2>();
+            bool holdingForward = touchingWall && Mathf.Abs(moveInput.x) > 0.1f && Mathf.Approximately(Mathf.Sign(moveInput.x), facingDirection);
+
+            if (holdingForward && rb.linearVelocity.y < 0f)
+            {
+                isWallSliding = true;
+                rb.linearVelocity = new Vector2(0f, -wallSlideSpeed);
+            }
+            else
+            {
+                isWallSliding = false;
+            }
+        }
+        private void PerformWallJump()
+        {
+            isScrambling = false;
+            isWallSliding = false;
+            isWallJumping = true; 
+            _hasScrambled = false; // Give the scramble back for the NEXT wall
+
+            // Push away from the wall and up
+            float jumpOutDirection = -facingDirection; 
+            rb.linearVelocity = new Vector2(jumpOutDirection * wallJumpForceX, wallJumpForceY);
+            
+            facingDirection = jumpOutDirection; // Turn the character around
+            DisplayAction("WALL JUMP!", Color.white);
         }
 
         private void HandleFlowEconomy()
@@ -377,11 +488,17 @@ namespace Player
         #endregion
 
        #region 4. MULTI-SENSOR SYSTEM & LOGIC (NEW)
-        private void CheckGrounded()
-        {
-            RaycastHit2D hit = Physics2D.Raycast(footPosition.position, Vector2.down, groundCheckDistance, groundLayer);
-            isGrounded = hit.collider;
-        }
+       private void CheckGrounded()
+       {
+           RaycastHit2D hit = Physics2D.Raycast(footPosition.position, Vector2.down, groundCheckDistance, groundLayer);
+           isGrounded = hit.collider;
+
+           if (isGrounded)
+           {
+               _hasScrambled = false; 
+               isWallJumping = false; 
+           }
+       }
 
         private void ScanFrontObstacles()
         {
@@ -400,23 +517,38 @@ namespace Player
         
         private void CheckAirborneLedgeGrab()
         {
-            // Only attempt a grab if we are falling, airborne, and not already busy
-            if (isGrounded || isVaulting || rb.linearVelocity.y > 0f) return; 
+            if (isGrounded || isVaulting || (rb.linearVelocity.y > 0f && !isScrambling)) return; 
 
-            // If Chest or Waist hits a wall, but the Head doesn't, we found the lip.
-            if ((_chestHit.collider || _waistHit.collider) && !_headHit.collider)
+            bool chestTouching = _chestHit.collider && _chestHit.distance <= wallContactThreshold;
+            bool waistTouching = _waistHit.collider && _waistHit.distance <= wallContactThreshold;
+
+            if ((chestTouching || waistTouching) && !_headHit.collider)
             {
-                Collider2D wallCollider = _chestHit.collider ? _chestHit.collider : _waistHit.collider;
-                Vector2 hitPoint = _chestHit.collider ? _chestHit.point : _waistHit.point;
+                Collider2D wallCollider = chestTouching ? _chestHit.collider : _waistHit.collider;
+                Vector2 hitPoint = chestTouching ? _chestHit.point : _waistHit.point;
                 
-                // Cast down from comfortably above the wall hit to find the exact top corner
                 Vector2 rayOrigin = new Vector2(hitPoint.x + (facingDirection * 0.1f), hitPoint.y + 1.5f);
                 RaycastHit2D downHit = Physics2D.Raycast(rayOrigin, Vector2.down, 2.5f, obstacleLayer);
 
                 if (downHit.collider)
                 {
-                    // No waiting. The moment we detect this state while falling, snap!
-                    SnapToLedge(hitPoint, downHit.point.y, wallCollider);
+                    float trueTopY = downHit.point.y;
+                    float topOfHeadY = transform.position.y + 2f;
+
+                    // The Fall-Past Check: Only grab if the top of our head has dipped down to the ledge line
+                    if (topOfHeadY <= trueTopY + 0.15f)
+                    {
+                        if (isScrambling)
+                        {
+                            isScrambling = false;
+                            DisplayAction("FLUID MANTLE!", Color.cyan);
+                            StartCoroutine(MantleRoutine(wallCollider));
+                        }
+                        else
+                        {
+                            SnapToLedge(hitPoint, trueTopY, wallCollider);
+                        }
+                    }
                 }
             }
         }
@@ -466,29 +598,18 @@ namespace Player
         private bool FireParkourAction(bool isTricking)
         {
             if (!_isCollidingFront) return false; 
-            CalculateParkourMatrix(isTricking);
-            return true; 
+            return CalculateParkourMatrix(isTricking); 
         }
 
-        private void CalculateParkourMatrix(bool isTricking)
+private bool CalculateParkourMatrix(bool isTricking)
         {
             float inputY = moveAction.action.ReadValue<Vector2>().y;
-
-            // 1. TALL WALL: Chest/Head hits.
-            if (_chestHit.collider || _headHit.collider)
-            {
-                DisplayAction("Climb!", Color.white);
-                StartCoroutine(MantleRoutine(_chestHit.collider ? _chestHit.collider : _headHit.collider));
-                return;
-            }
 
             // 2. VAULTABLE / TABLE: Waist hits, Chest is clear.
             if (_waistHit.collider && !_chestHit.collider)
             {
                 float trueTopY;
                 float obstacleDepth = CalculateObstacleDepth(_waistHit, out trueTopY);
-
-                // Calculate exactly how high the player needs to lift their center to clear the lip
                 float exactHeightToClear = (trueTopY - transform.position.y);
 
                 if (obstacleDepth < 1.0f)
@@ -508,7 +629,7 @@ namespace Player
                     DisplayAction("Mantle!", Color.white);
                     StartCoroutine(MantleRoutine(_waistHit.collider));
                 }
-                return;
+                return true; // Move executed, consume the jump!
             }
 
             // 3. LOW OBSTACLE: Shin or Toe hits, Waist is clear.
@@ -517,8 +638,10 @@ namespace Player
                 float duration = isTricking ? 0.4f : 0.2f;
                 DisplayAction(isTricking ? "TRICK HOP!" : "SPEED STEP!", isTricking ? Color.cyan : Color.white);
                 StartCoroutine(VaultRoutine(_shinHit.collider ? _shinHit.collider : _toeHit.collider, duration, 0.1f));
-                return;
+                return true; // Move executed, consume the jump!
             }
+
+            return false; // No valid vault found. DO NOT consume the jump!
         }
         private float CalculateObstacleDepth(RaycastHit2D forwardHit, out float trueTopY)
         {
@@ -620,6 +743,31 @@ namespace Player
         #endregion
 
         #region 5. COROUTINES
+        private IEnumerator WallScrambleRoutine()
+        {
+            isScrambling = true;
+            DisplayAction("SCRAMBLE!", Color.white);
+            
+            float timePassed = 0f;
+            
+            // Drive them straight up for a set duration, as long as they touch the wall
+            while (timePassed < wallScrambleDuration && _isCollidingFront)
+            {
+                timePassed += Time.deltaTime;
+                rb.linearVelocity = new Vector2(0f, wallScrambleSpeed); 
+                
+                // If our ledge-grab logic catches a ledge mid-scramble, abort the scramble
+                if (isHanging || isVaulting) 
+                {
+                    isScrambling = false;
+                    yield break; 
+                }
+                
+                yield return new WaitForFixedUpdate();
+            }
+            
+            isScrambling = false;
+        }
         private IEnumerator VaultRoutine(Collider2D obstacle, float duration, float extraHeight)
         {
             isVaulting = true;
