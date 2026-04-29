@@ -82,9 +82,9 @@ namespace Player
         [Header("Multi-Sensor Array")]
         public Transform headPosition; 
         public Transform chestPosition;
-        public Transform waistPosition; // Hips to Knees
-        public Transform shinPosition;  // Knees to Ankles
-        public Transform footPosition;  // The Toe
+        public Transform waistPosition; 
+        public Transform shinPosition;  
+        public Transform footPosition;  
 
         [Header("Sensor Dimensions")]
         public Vector2 headBoxSize = new(0.2f, 0.2f);
@@ -410,9 +410,29 @@ namespace Player
             // 2. VAULTABLE / TABLE: Waist hits, Chest is clear.
             if (_waistHit.collider && !_chestHit.collider)
             {
-                float duration = isTricking ? 0.7f : 0.3f;
-                DisplayAction(isTricking ? "TRICK VAULT!" : "SPEED VAULT!", isTricking ? Color.cyan : Color.white);
-                StartCoroutine(VaultRoutine(_waistHit.collider, duration, 1.0f));
+                float trueTopY;
+                float obstacleDepth = CalculateObstacleDepth(_waistHit, out trueTopY);
+
+                // Calculate exactly how high the player needs to lift their center to clear the lip
+                float exactHeightToClear = (trueTopY - transform.position.y);
+
+                if (obstacleDepth < 1.0f)
+                {
+                    float duration = isTricking ? 0.4f : 0.2f;
+                    DisplayAction(isTricking ? "TRICK VAULT!" : "SPEED VAULT!", isTricking ? Color.cyan : Color.white);
+                    StartCoroutine(VaultRoutine(_waistHit.collider, duration, exactHeightToClear));
+                }
+                else if (obstacleDepth < 3.0f)
+                {
+                    float duration = isTricking ? 0.7f : 0.4f;
+                    DisplayAction(isTricking ? "TRICK KONG!" : "SPEED KONG!", isTricking ? Color.cyan : Color.white);
+                    StartCoroutine(VaultRoutine(_waistHit.collider, duration, exactHeightToClear));
+                }
+                else
+                {
+                    DisplayAction("Mantle!", Color.white);
+                    StartCoroutine(MantleRoutine(_waistHit.collider));
+                }
                 return;
             }
 
@@ -424,6 +444,64 @@ namespace Player
                 StartCoroutine(VaultRoutine(_shinHit.collider ? _shinHit.collider : _toeHit.collider, duration, 0.1f));
                 return;
             }
+        }
+        private float CalculateObstacleDepth(RaycastHit2D forwardHit, out float trueTopY)
+        {
+            float maxSearchDistance = 4f; 
+            float maxClimbHeight = 2.5f; // Maximum Y distance we are willing to scan upwards
+            float scanStep = 0.1f;
+            
+            trueTopY = forwardHit.point.y; 
+            bool foundTop = false;
+
+            // --- 1. THE VERTICAL SCAN (Find the lip) ---
+            // Start slightly pulled back from the wall so our forward casts don't spawn inside it
+            Vector2 verticalScanOrigin = new Vector2(forwardHit.point.x - (facingDirection * 0.05f), forwardHit.point.y);
+
+            for (float yOffset = scanStep; yOffset <= maxClimbHeight; yOffset += scanStep)
+            {
+                Vector2 stepOrigin = new Vector2(verticalScanOrigin.x, verticalScanOrigin.y + yOffset);
+                
+                // Cast forward a tiny bit to see if the wall is still there
+                RaycastHit2D hit = Physics2D.Raycast(stepOrigin, new Vector2(facingDirection, 0f), 0.2f, obstacleLayer);
+
+                if (!hit.collider)
+                {
+                    // The ray missed! We found the top edge.
+                    // We set trueTopY slightly below the miss-line to ensure our downward casts hit the surface.
+                    trueTopY = stepOrigin.y - (scanStep / 2f); 
+                    foundTop = true;
+                    break;
+                }
+            }
+
+            if (!foundTop)
+            {
+                // The wall goes up infinitely (or higher than maxClimbHeight). 
+                // Return massive depth so the system treats it as an unclimbable wall.
+                return maxSearchDistance + 1f; 
+            }
+
+            // --- 2. THE HORIZONTAL SCAN (Find the depth) ---
+            float depthStep = 0.25f;
+            float startX = forwardHit.point.x + (facingDirection * 0.1f);
+
+            for (float depth = 0f; depth <= maxSearchDistance; depth += depthStep)
+            {
+                // Position probe slightly above our newly found trueTopY
+                Vector2 rayOrigin = new Vector2(startX + (facingDirection * depth), trueTopY + 0.2f);
+                
+                // Cast straight down
+                RaycastHit2D downHit = Physics2D.Raycast(rayOrigin, Vector2.down, 0.5f, obstacleLayer);
+
+                // If we hit nothing, or the floor drops out, we found the back edge
+                if (!downHit.collider || downHit.point.y < trueTopY - 0.2f)
+                {
+                    return depth; 
+                }
+            }
+            
+            return maxSearchDistance; // Massive platform (Mantle)
         }
 
         private void Springboard()

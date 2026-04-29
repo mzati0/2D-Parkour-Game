@@ -1911,6 +1911,12 @@ MonoBehaviour:
   parent: {fileID: 217200433}
   chunkPrefabs:
   - {fileID: 7627312716001316831, guid: ad0e23883c56e8b49b586d6b32d54962, type: 3}
+  - {fileID: 7627312716001316831, guid: e33ca6d4fddceb549b21607b12387478, type: 3}
+  - {fileID: 7627312716001316831, guid: ebd33efbdd5c7e84ab35857c36f1024f, type: 3}
+  - {fileID: 7627312716001316831, guid: f2441a2e19352794ea3978ff07041918, type: 3}
+  - {fileID: 7627312716001316831, guid: ed51ea0a16f84bd4f9f340e4053dc289, type: 3}
+  - {fileID: 7627312716001316831, guid: d00a6c94255ab454c9bd054c31a1704c, type: 3}
+  - {fileID: 7627312716001316831, guid: 5af50624325c17b478203cac5b62c1a0, type: 3}
   chunkLength: 20
   spawnDistanceThreshold: 30
 --- !u!4 &1140890318
@@ -2876,7 +2882,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &1837013705
 MonoBehaviour:
   m_ObjectHideFlags: 0

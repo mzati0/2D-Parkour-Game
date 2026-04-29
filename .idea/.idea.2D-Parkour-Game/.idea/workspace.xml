@@ -6,8 +6,6 @@
   <component name="ChangeListManager">
     <list default="true" id="c43372a0-2222-45b5-a268-286248e62425" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/.idea.2D-Parkour-Game/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/.idea.2D-Parkour-Game/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Assets/Prefabs/Chunk_Empty.prefab" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Prefabs/Chunk_Empty.prefab" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Assets/Scenes/SampleScene.unity" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Scenes/SampleScene.unity" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Assets/Scripts/Player/ParkourController.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Scripts/Player/ParkourController.cs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -106,7 +104,7 @@
       <updated>1774951729521</updated>
       <workItem from="1774951732129" duration="715000" />
       <workItem from="1776262580017" duration="14446000" />
-      <workItem from="1777467712052" duration="1278000" />
+      <workItem from="1777467712052" duration="1918000" />
     </task>
     <servers />
   </component>
