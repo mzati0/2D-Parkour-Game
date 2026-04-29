@@ -33,6 +33,8 @@ namespace Player
         public bool isStumbling;
         public bool isSliding;
         public bool isCrouching;
+        public bool isHanging;
+        private Collider2D _currentLedge;
 
         [Header("State Colors")]
         public Color normalColor = Color.blue;
@@ -162,6 +164,14 @@ namespace Player
         {
             CheckGrounded();
             ScanFrontObstacles(); // Always keep our nervous system updated
+            
+            if (isHanging)
+            {
+                HandleHangingState();
+                return; // Skips all movement and gravity logic while on the wall
+            }
+
+            CheckAirborneLedgeGrab();
             
             if (!isGrounded && (isSliding || isCrouching)) StandUp();
             
@@ -386,6 +396,71 @@ namespace Player
             _toeHit = Physics2D.BoxCast(footPosition.position, toeBoxSize, 0f, fireDirection, sensorCastDistance, obstacleLayer);
 
             _isCollidingFront = _headHit.collider || _chestHit.collider || _waistHit.collider || _shinHit.collider || _toeHit.collider;
+        }
+        
+        private void CheckAirborneLedgeGrab()
+        {
+            // Only attempt a grab if we are falling, airborne, and not already busy
+            if (isGrounded || isVaulting || rb.linearVelocity.y > 0f) return; 
+
+            // If Chest or Waist hits a wall, but the Head doesn't, we found the lip.
+            if ((_chestHit.collider || _waistHit.collider) && !_headHit.collider)
+            {
+                Collider2D wallCollider = _chestHit.collider ? _chestHit.collider : _waistHit.collider;
+                Vector2 hitPoint = _chestHit.collider ? _chestHit.point : _waistHit.point;
+                
+                // Cast down from comfortably above the wall hit to find the exact top corner
+                Vector2 rayOrigin = new Vector2(hitPoint.x + (facingDirection * 0.1f), hitPoint.y + 1.5f);
+                RaycastHit2D downHit = Physics2D.Raycast(rayOrigin, Vector2.down, 2.5f, obstacleLayer);
+
+                if (downHit.collider)
+                {
+                    // No waiting. The moment we detect this state while falling, snap!
+                    SnapToLedge(hitPoint, downHit.point.y, wallCollider);
+                }
+            }
+        }
+
+        private void SnapToLedge(Vector2 wallHitPoint, float trueTopY, Collider2D ledgeCollider)
+        {
+            isHanging = true;
+            _currentLedge = ledgeCollider;
+            
+            // Freeze physics
+            rb.bodyType = RigidbodyType2D.Kinematic;
+            rb.linearVelocity = Vector2.zero;
+
+            // Calculate snap coordinates
+            float targetX = Mathf.Approximately(facingDirection, 1f) 
+                ? wallHitPoint.x - (playerWidth / 2f) 
+                : wallHitPoint.x + (playerWidth / 2f);
+            
+            // Align the top of the head exactly to the ledge
+            float targetY = trueTopY - 2f;
+
+            transform.position = new Vector2(targetX, targetY);
+            
+            DisplayAction("LEDGE GRAB!", Color.white);
+            if (cubeSprite) cubeSprite.color = normalColor;
+        }
+
+        private void HandleHangingState()
+        {
+            float inputY = moveAction.action.ReadValue<Vector2>().y;
+
+            if (inputY > 0.5f) // Press UP to Mantle
+            {
+                isHanging = false;
+                DisplayAction("MANTLE!", Color.white);
+                if (_currentLedge) StartCoroutine(MantleRoutine(_currentLedge));
+            }
+            else if (inputY < -0.5f) // Press DOWN to Drop
+            {
+                isHanging = false;
+                rb.bodyType = RigidbodyType2D.Dynamic;
+                _currentLedge = null;
+                DisplayAction("DROP", Color.gray);
+            }
         }
 
         private bool FireParkourAction(bool isTricking)
