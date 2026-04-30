@@ -210,38 +210,38 @@ namespace Player
         {
             if (isVaulting || isStumbling || isSliding || isCrouching || isHanging) return;
 
-            // Calculate strict physical touch, not just awareness
-            bool touchingWall = (_headHit.collider && _headHit.distance <= wallContactThreshold) || 
-                                (_chestHit.collider && _chestHit.distance <= wallContactThreshold) || 
-                                (_waistHit.collider && _waistHit.distance <= wallContactThreshold);
+            // Must be a flush, flat wall to jump or standstill scramble
+            bool isFlushWall = (_chestHit.collider && _chestHit.distance <= wallContactThreshold) &&
+                               (_waistHit.collider && _waistHit.distance <= wallContactThreshold) &&
+                               (_shinHit.collider && _shinHit.distance <= wallContactThreshold) &&
+                               (_toeHit.collider && _toeHit.distance <= wallContactThreshold);
 
             Vector2 moveInput = moveAction.action.ReadValue<Vector2>();
             bool holdingForward = Mathf.Abs(moveInput.x) > 0.1f && Mathf.Approximately(Mathf.Sign(moveInput.x), facingDirection);
             bool holdingUp = moveInput.y > 0.5f;
 
-            // 1. STANDSTILL SCRAMBLE: Grounded, hugging wall, holding Up + Forward
-            if (isGrounded && touchingWall && holdingForward && holdingUp)
+            // 1. STANDSTILL SCRAMBLE (Requires flush wall)
+            if (isGrounded && isFlushWall && holdingForward && holdingUp)
             {
                 _hasScrambled = true; 
                 StartCoroutine(WallScrambleRoutine());
                 return;
             }
 
-            // 2. STRICT WALL JUMP: Must be physically touching, not just aware
-            if (isScrambling || isWallSliding || (!isGrounded && touchingWall))
+            // 2. STRICT WALL JUMP (Requires flush wall)
+            if (isScrambling || isWallSliding || (!isGrounded && isFlushWall))
             {
                 PerformWallJump();
                 return;
             }
 
-            // 3. STANDARD GROUNDED JUMP & PARKOUR
-            if (!isGrounded) return; 
-
+            // 3. AIRBORNE / GROUNDED PARKOUR & JUMP
             if (Mathf.Abs(moveInput.x) > 0.1f)
             {
-                // If FireParkourAction returns false, the jump won't be eaten!
                 if (FireParkourAction(false)) return; 
             }
+
+            if (!isGrounded) return; 
 
             rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
         }
@@ -357,14 +357,15 @@ private void HandleMovement()
         }
         private void CheckWallScramble()
         {
-            // Added _hasScrambled to the block list
             if (isGrounded || isScrambling || isVaulting || isHanging || _hasScrambled) return;
 
-            bool touchingWall = (_headHit.collider && _headHit.distance <= wallContactThreshold) || 
-                                (_chestHit.collider && _chestHit.distance <= wallContactThreshold) || 
-                                (_waistHit.collider && _waistHit.distance <= wallContactThreshold);
+            // Mirror's Edge Rule: Must be a flush, solid wall. All lower body sensors must hit.
+            bool isFlushWall = (_chestHit.collider && _chestHit.distance <= wallContactThreshold) &&
+                               (_waistHit.collider && _waistHit.distance <= wallContactThreshold) &&
+                               (_shinHit.collider && _shinHit.distance <= wallContactThreshold) &&
+                               (_toeHit.collider && _toeHit.distance <= wallContactThreshold);
 
-            if (!touchingWall) return;
+            if (!isFlushWall) return;
 
             Vector2 moveInput = moveAction.action.ReadValue<Vector2>();
             bool holdingForward = Mathf.Abs(moveInput.x) > 0.1f && Mathf.Approximately(Mathf.Sign(moveInput.x), facingDirection);
@@ -372,7 +373,7 @@ private void HandleMovement()
 
             if (holdingForward && holdingUp)
             {
-                _hasScrambled = true; // Lock it out for the rest of this jump
+                _hasScrambled = true; 
                 StartCoroutine(WallScrambleRoutine());
             }
         }
@@ -517,37 +518,41 @@ private void HandleMovement()
         
         private void CheckAirborneLedgeGrab()
         {
-            if (isGrounded || isVaulting || (rb.linearVelocity.y > 0f && !isScrambling)) return; 
+            // Only check if falling or at the absolute apex
+            if (isGrounded || isVaulting || isScrambling || rb.linearVelocity.y > 0.1f) return; 
 
-            bool chestTouching = _chestHit.collider && _chestHit.distance <= wallContactThreshold;
-            bool waistTouching = _waistHit.collider && _waistHit.distance <= wallContactThreshold;
+            // Wide net for neutral jumps to prevent missing
+            float ledgeCatchRadius = wallContactThreshold + 0.2f; 
 
-            if ((chestTouching || waistTouching) && !_headHit.collider)
+            bool chestHit = _chestHit.collider && _chestHit.distance <= ledgeCatchRadius;
+            bool waistHit = _waistHit.collider && _waistHit.distance <= ledgeCatchRadius;
+            bool headClear = !_headHit.collider || _headHit.distance > ledgeCatchRadius;
+
+            // THE LEDGE INTERCEPT: Chest/Waist hits, Head is clear
+            if ((chestHit || waistHit) && headClear)
             {
-                Collider2D wallCollider = chestTouching ? _chestHit.collider : _waistHit.collider;
-                Vector2 hitPoint = chestTouching ? _chestHit.point : _waistHit.point;
+                Collider2D wallCollider = chestHit ? _chestHit.collider : _waistHit.collider;
+                Vector2 hitPoint = chestHit ? _chestHit.point : _waistHit.point;
                 
                 Vector2 rayOrigin = new Vector2(hitPoint.x + (facingDirection * 0.1f), hitPoint.y + 1.5f);
                 RaycastHit2D downHit = Physics2D.Raycast(rayOrigin, Vector2.down, 2.5f, obstacleLayer);
 
                 if (downHit.collider)
                 {
-                    float trueTopY = downHit.point.y;
-                    float topOfHeadY = transform.position.y + 2f;
+                    Vector2 moveInput = moveAction.action.ReadValue<Vector2>();
+                    bool holdingForward = Mathf.Abs(moveInput.x) > 0.1f && Mathf.Approximately(Mathf.Sign(moveInput.x), facingDirection);
+                    bool holdingUp = moveInput.y > 0.5f;
 
-                    // The Fall-Past Check: Only grab if the top of our head has dipped down to the ledge line
-                    if (topOfHeadY <= trueTopY + 0.15f)
+                    // PRIORITIZE CLIMBING: If pushing in, force the mantle immediately.
+                    if (holdingForward || holdingUp)
                     {
-                        if (isScrambling)
-                        {
-                            isScrambling = false;
-                            DisplayAction("FLUID MANTLE!", Color.cyan);
-                            StartCoroutine(MantleRoutine(wallCollider));
-                        }
-                        else
-                        {
-                            SnapToLedge(hitPoint, trueTopY, wallCollider);
-                        }
+                        DisplayAction("AUTO MANTLE!", Color.cyan);
+                        StartCoroutine(MantleRoutine(wallCollider));
+                    }
+                    else
+                    {
+                        // NEUTRAL: The instant teleport snap that actually works.
+                        SnapToLedge(hitPoint, downHit.point.y, wallCollider);
                     }
                 }
             }
