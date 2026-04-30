@@ -126,6 +126,8 @@ namespace Player
         public TextMeshProUGUI actionText;
         public TextMeshProUGUI speedKmhText;
         public TextMeshProUGUI speedUsText;
+        public TextMeshProUGUI distanceText;
+        public TextMeshProUGUI difficultyText;
         public TextMeshProUGUI flowCapacityText;
         public TextMeshProUGUI flowRateText;
         public Image flowMeterFill;
@@ -700,7 +702,7 @@ private bool CalculateParkourMatrix(bool isTricking)
                     DisplayAction(isTricking ? "TRICK VAULT!" : "SPEED VAULT!", isTricking ? Color.cyan : Color.white);
                     StartCoroutine(VaultRoutine(_waistHit.collider, duration, exactHeightToClear));
                 }
-                else if (obstacleDepth < 3.0f)
+                else if (obstacleDepth <= 3.5f)
                 {
                     float duration = isTricking ? 0.7f : 0.4f;
                     DisplayAction(isTricking ? "TRICK KONG!" : "SPEED KONG!", isTricking ? Color.cyan : Color.white);
@@ -1055,7 +1057,23 @@ private bool CalculateParkourMatrix(bool isTricking)
                 float colorRatio = Mathf.InverseLerp(minTopSpeed, maxTopSpeed, trueSpeed);
                 speedKmhText.color = Color.Lerp(Color.white, Color.cyan, colorRatio);
             }
-        
+
+            if (distanceText)
+            {
+                float trueDistance = Mathf.Abs(transform.position.x);
+                distanceText.text = (trueDistance*3).ToString("F0") + " m";
+            }
+
+            if(difficultyText)
+            {
+                float distance = Mathf.Abs(transform.position.x);
+
+                if (distance < 200f) difficultyText.text = "EASY";
+                else if (distance < 500f) difficultyText.text = "MEDIUM";
+                else if (distance < 800f) difficultyText.text = "HARD";
+                else difficultyText.text = "HAHAHA"; // Risk of Rain style endgame
+            }
+
             if (flowCapacityText) flowCapacityText.text = currentFlowMeter.ToString("F0") + " / " + maxFlowMeter.ToString("F0");
         
             if (flowRateText)

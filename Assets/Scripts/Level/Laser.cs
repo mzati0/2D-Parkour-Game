@@ -3,28 +3,29 @@ using UnityEngine.SceneManagement;
     
 public class RedLaserDeathWall : MonoBehaviour
 {
-    [Header("Settings")]
-    public float startingSpeed = 1f; 
-    public float acceleration = 0.5f; // How much speed it gains per second
-    public float maxSpeed = 15f; // The absolute cap
-    
-    private float _currentSpeed;
+    [Header("References")]
+    public Transform player; // Drag your player here in the inspector
 
-    private void Awake()
-    {
-        _currentSpeed = startingSpeed;
-    }
+    [Header("Rubberband Settings")]
+    public float baseSpeed = 7.5f;       // The slow, terrifying speed when it's right behind you
+    public float catchUpSpeed = 15f;     // The fast speed when you leave it far behind
+    public float catchUpDistance = 25f;  // If you are this many units ahead, it goes max speed
 
     private void Update()
     {
-            // 1. Increase the speed every frame
-            _currentSpeed += acceleration * Time.deltaTime;
-            
-            // 2. Clamp it so it doesn't get infinitely fast
-            _currentSpeed = Mathf.Clamp(_currentSpeed, 0, maxSpeed);
+        if (player == null) return;
 
-            // 3. Move the wall at the new current speed
-            transform.Translate(Vector3.right * (_currentSpeed * Time.deltaTime));
+        // 1. How far ahead is the player?
+        float distanceToPlayer = player.position.x - transform.position.x;
+
+        // 2. Calculate speed based on distance. 
+        // Mathf.Lerp smoothly blends between baseSpeed and catchUpSpeed based on the distance.
+        // If distance is 0, speed = 7.5. If distance is 25+, speed = 15.
+        float speedRatio = Mathf.Clamp01(distanceToPlayer / catchUpDistance);
+        float currentSpeed = Mathf.Lerp(baseSpeed, catchUpSpeed, speedRatio);
+
+        // 3. Move the wall
+        transform.Translate(Vector3.right * (currentSpeed * Time.deltaTime));
     }
 
     private void OnTriggerEnter2D(Collider2D collision)
