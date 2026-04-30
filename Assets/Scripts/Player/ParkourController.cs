@@ -199,7 +199,6 @@ namespace Player
             HandleFlowEconomy();
             HandleMovement();
             HandleCrouchAndSlide();
-            HandlePassiveStumble();
             HandleParkourHold();
             HandleUI(); 
         }
@@ -208,7 +207,12 @@ namespace Player
         #region 2. INPUT HANDLERS
         private void OnJump(InputAction.CallbackContext context)
         {
-            if (isVaulting || isStumbling || isSliding || isCrouching || isHanging) return;
+            if (isVaulting) 
+            {
+                Springboard();
+                return;
+            }
+            if (isStumbling || isSliding || isCrouching || isHanging) return;
 
             // Must be a flush, flat wall to jump or standstill scramble
             bool isFlushWall = (_chestHit.collider && _chestHit.distance <= wallContactThreshold) &&
@@ -317,7 +321,7 @@ private void HandleMovement()
             }
             else
             {
-                // If you let go of the stick mid-air, you shouldn't magically hit the brakes.
+                // If you let go of the stick midair, you shouldn't magically hit the brakes.
                 // We only apply deceleration if you are on the ground.
                 float decelToUse = isGrounded ? decelerationRate : 0f; 
                 currentVelocityX = Mathf.MoveTowards(currentVelocityX, 0f, decelToUse * Time.deltaTime);
@@ -463,11 +467,17 @@ private void HandleMovement()
         {
             if (isVaulting || !isGrounded || isStumbling || parkourAction.action.IsPressed()) return;
 
-            // Using the new Toe Hit logic instead of the old raycast
             if (_toeHit.collider && !_waistHit.collider)
             {
+                // NEW: How deep is the object we tripped on?
+                float trueTopY;
+                float obstacleDepth = CalculateObstacleDepth(_toeHit, out trueTopY);
+
+                // If it's deeper than 1.5 units, it's a massive floor. Do not vault it.
+                bool isVaultableSize = obstacleDepth < 1.5f;
                 float armorCost = 50f; 
-                if (currentFlowMeter >= armorCost)
+
+                if (isVaultableSize && currentFlowMeter >= armorCost)
                 {
                     currentFlowMeter -= armorCost;
                     DisplayAction("STUMBLE PROTECTED!", Color.cyan);
@@ -476,6 +486,7 @@ private void HandleMovement()
                 }
                 else
                 {
+                    // No armor, OR the object is too massively deep to vault. Trip normally.
                     StartCoroutine(StumbleRoutine(_toeHit.collider));
                 }
             }
@@ -489,6 +500,72 @@ private void HandleMovement()
         #endregion
 
        #region 4. MULTI-SENSOR SYSTEM & LOGIC (NEW)
+        private void OnCollisionEnter2D(Collision2D collision)
+        {
+            if (isVaulting || !isGrounded || isStumbling || parkourAction.action.IsPressed() || isHanging || isScrambling) return;
+
+            if (((1 << collision.gameObject.layer) & obstacleLayer) != 0)
+            {
+                ContactPoint2D contact = collision.GetContact(0);
+                
+                // Only trigger if we hit the flat SIDE of an object
+                if (Mathf.Abs(contact.normal.x) > 0.5f)
+                {
+                    // 1. THE SENSOR HEIGHT MAP (Zero bounds used)
+                    // If Waist, Chest, or Head is blocked -> It's a solid wall. 
+                    // Do absolutely nothing. Physics will stop the player dead.
+                    if (_waistHit.collider || _chestHit.collider || _headHit.collider) return;
+
+                    bool isShinHigh = _shinHit.collider; 
+                    bool isToeHigh = _toeHit.collider && !_shinHit.collider;
+
+                    if (!isShinHigh && !isToeHigh) return; // Failsafe
+
+                    // 2. SPEED CONVERSIONS
+                    float currentSpeed = Mathf.Abs(rb.linearVelocity.x);
+                    float speed10 = 3.33f; // 10 km/h
+                    float speed24 = 8.0f;  // 24 km/h
+                    float speed36 = 12.0f; // 36 km/h
+
+                    int severity = 0; // 0=None, 1=Yellow, 2=Orange, 3=Red
+
+                    // 3. THE EXACT SEVERITY MATRIX
+                    if (isShinHigh)
+                    {
+                        if (currentSpeed < speed10) severity = 1;
+                        else if (currentSpeed < speed24) severity = 2;
+                        else severity = 3;
+                    }
+                    else if (isToeHigh)
+                    {
+                        if (currentSpeed < speed10) severity = 0;
+                        else if (currentSpeed < speed24) severity = 1;
+                        else if (currentSpeed < speed36) severity = 2;
+                        else severity = 3;
+                    }
+
+                    // Low speed toe-hit: Do nothing at all.
+                    if (severity == 0) return;
+
+                    // 4. THE ARMOR CHECK
+                    // Armor only triggers on severity 1 or 2. 
+                    // If it's a RED crash (severity 3) at Mach 10, armor fails. You eat the crash.
+                    if (severity < 3 && currentFlowMeter >= 50f)
+                    {
+                        currentFlowMeter -= 50f;
+                        DisplayAction("STUMBLE PROTECTED!", Color.cyan);
+                        if (cubeSprite) cubeSprite.color = Color.cyan;
+                        
+                        // Pass the collider just to get the reference, we'll fix VaultRoutine's bounds next if needed
+                        StartCoroutine(VaultRoutine(collision.collider, 0.2f, 0.15f));
+                        return;
+                    }
+
+                    // 5. UNARMORED / RED CRASH
+                    StartCoroutine(DynamicStumbleRoutine(collision.collider, severity));
+                }
+            }
+        }
        private void CheckGrounded()
        {
            RaycastHit2D hit = Physics2D.Raycast(footPosition.position, Vector2.down, groundCheckDistance, groundLayer);
@@ -709,8 +786,14 @@ private bool CalculateParkourMatrix(bool isTricking)
 
         private void Springboard()
         {
-            DisplayAction("SPRINGBOARD!", Color.white);
-            rb.linearVelocity = new Vector2(rb.linearVelocity.x, springboardForce);
+            StopAllCoroutines(); // Aborts the VaultRoutine mid-air
+            isVaulting = false;
+            _capsuleCollider2D.enabled = true;
+            rb.bodyType = RigidbodyType2D.Dynamic;
+
+            // Maintain forward momentum but add massive upward force
+            rb.linearVelocity = new Vector2(facingDirection * topSpeed, springboardForce);
+            DisplayAction("SPRINGBOARD!", Color.magenta);
         }
 
         private void StartSlide()
@@ -787,7 +870,7 @@ private bool CalculateParkourMatrix(bool isTricking)
                 ? obstacle.bounds.max.x + (playerWidth / 2f) + clearancePadding 
                 : obstacle.bounds.min.x - (playerWidth / 2f) - clearancePadding;
         
-            Vector2 endPos = new Vector2(landX, startPos.y); 
+            Vector2 endPos = new Vector2(landX, startPos.y + 0.15f); 
             float heightToClear = (obstacle.bounds.max.y - startPos.y) + extraHeight;
             float timePassed = 0f;
 
@@ -889,6 +972,62 @@ private bool CalculateParkourMatrix(bool isTricking)
 
             float speedRatio = Mathf.Abs(rb.linearVelocity.x) / topSpeed;
             _stumbleTimer = Mathf.Clamp(5f * speedRatio, 1f, 5f);
+        }
+        private IEnumerator DynamicStumbleRoutine(Collider2D obstacle, int severity)
+        {
+            isVaulting = true;
+            isStumbling = true;
+            
+            // Default to Red (Severe)
+            Color flashColor = Color.red;
+            float tripDuration = 0.5f;     // How long the physical trip takes
+            float recoveryPenalty = 3f;    // How long you are stunned/slowed afterwards
+
+            if (severity == 1) // YELLOW: Minor Hiccup
+            {
+                flashColor = slideColor; // Yellow
+                tripDuration = 0.15f;
+                recoveryPenalty = 0.5f;
+            }
+            else if (severity == 2) // ORANGE: Medium Stun
+            {
+                flashColor = new Color(1f, 0.5f, 0f); // Orange
+                tripDuration = 0.3f;
+                recoveryPenalty = 1.5f;
+            }
+
+            DisplayAction("STUMBLE!", flashColor);
+            if (cubeSprite) cubeSprite.color = flashColor;
+        
+            rb.bodyType = RigidbodyType2D.Kinematic; 
+            rb.linearVelocity = Vector2.zero;
+            _capsuleCollider2D.enabled = false;
+
+            Vector2 startPos = transform.position;
+            float landX = Mathf.Approximately(facingDirection, 1) ? obstacle.bounds.max.x + (playerWidth / 2f) : obstacle.bounds.min.x - (playerWidth / 2f);
+            Vector2 endPos = new Vector2(landX, startPos.y); 
+
+            float timePassed = 0f;
+
+            // The physical drag over the tripping hazard
+            while (timePassed < tripDuration)
+            {
+                timePassed += Time.deltaTime;
+                float linearT = timePassed / tripDuration;
+                float sagModifier = Mathf.Sin(linearT * Mathf.PI) * 0.2f; 
+                Vector2 currentPos = Vector2.Lerp(startPos, endPos, linearT);
+                currentPos.y += sagModifier;
+                rb.MovePosition(currentPos);
+                yield return new WaitForFixedUpdate();
+            }
+
+            _capsuleCollider2D.enabled = true;
+            rb.bodyType = RigidbodyType2D.Dynamic; 
+            isVaulting = false;
+            _lockedFacingDirection = facingDirection;
+
+            // Apply the severity penalty timer
+            _stumbleTimer = recoveryPenalty;
         }
         #endregion
 
