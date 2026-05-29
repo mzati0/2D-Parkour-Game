@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: GaskellgamesSettings
   m_EditorClassIdentifier: Gaskellgames::Gaskellgames.GaskellgamesSettings_SO
   showHubOnStartup: 0
-  debugGgTrackedTasks: 1
+  debugGgTrackedTasks: 0
   showPackageBanners: 1
   editorWindowBanner: 1
   componentBanner: 1
