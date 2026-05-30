@@ -34,6 +34,7 @@ namespace Player
         public bool isSliding;
         public bool isCrouching;
         public bool isHanging;
+        public bool isRagdolling;
         private Collider2D _currentLedge;
         public bool isScrambling;
         private bool _hasScrambled; // NEW: Prevents infinite scaling
@@ -176,6 +177,15 @@ namespace Player
 
         private void Update()
         {
+            if (isRagdolling)
+            {
+                // Kill any phantom momentum trying to build up in the background
+                rb.linearVelocity = Vector2.zero; 
+        
+                // Keep updating the UI, but skip all movement and raycasting
+                HandleUI(); 
+                return; 
+            }
             CheckGrounded();
             ScanFrontObstacles(); 
             
