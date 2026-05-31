@@ -15,6 +15,9 @@ namespace Player
         public SpriteRenderer cubeSprite;
         private CapsuleCollider2D _capsuleCollider2D;
         [SerializeField] private GameObject sprites;
+        
+        [Header("Animation")]
+        public Animator ghostAnimator;
         #endregion
 
         #region VARIABLES: Input Actions
@@ -212,6 +215,7 @@ namespace Player
             HandleMovement();
             HandleCrouchAndSlide();
             HandleParkourHold();
+            HandleAnimation();
             HandleUI(); 
         }
         #endregion
@@ -1098,6 +1102,14 @@ private bool CalculateParkourMatrix(bool isTricking)
                     flowRateText.gameObject.SetActive(false);
                 }
             }
+        }
+
+        private void HandleAnimation()
+        {
+            print(Mathf.Abs(rb.linearVelocity.x));
+            
+            //maybe use min an max for this part
+            ghostAnimator.SetFloat("Speed", Mathf.Abs(rb.linearVelocity.x));
         }
 
         private void ApplyDownVisuals(Color stateColor)
