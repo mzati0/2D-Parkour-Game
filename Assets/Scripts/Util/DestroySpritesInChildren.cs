@@ -10,7 +10,7 @@ namespace Util
             if(!on) return;
             foreach (var sprite in GetComponentsInChildren<SpriteRenderer>())
             {
-                Destroy(sprite);
+                //Destroy(sprite);
                 sprite.enabled = false;
             }
         }
