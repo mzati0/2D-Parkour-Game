@@ -2,15 +2,16 @@ using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine.InputSystem;
+using UnityEngine.Serialization;
 
 namespace ActiveRagoll
 {
     public class RagdollStateManager : MonoBehaviour
     {
         [Header("Core References")]
-        public Animator ghostAnimator;
+        [FormerlySerializedAs("ghostAnimator")] public Animator animator;
         public VisualSkeletonMapper visualMapper;
-        public Transform activePelvis;
+        [FormerlySerializedAs("activePelvis")] public Transform activeRagdollRoot;
         
         [Header("Player Root Sync")]
         public Transform playerRoot; 
@@ -27,7 +28,7 @@ namespace ActiveRagoll
 
         void Start()
         {
-            Rigidbody2D[] allRigidbodies = activePelvis.GetComponentsInChildren<Rigidbody2D>();
+            Rigidbody2D[] allRigidbodies = activeRagdollRoot.GetComponentsInChildren<Rigidbody2D>();
             
             foreach (Rigidbody2D rb in allRigidbodies)
             {
@@ -52,7 +53,7 @@ namespace ActiveRagoll
             // This ensures they are perfectly aligned when you press T.
             if (_isRagdolling && playerRoot != null)
             {
-                playerRoot.position = activePelvis.position + standUpOffset;
+                playerRoot.position = activeRagdollRoot.position + standUpOffset;
             }
 
             if (Keyboard.current != null)
@@ -65,7 +66,7 @@ namespace ActiveRagoll
         public void TriggerRagdollDrop()
         {
             _isRagdolling = true;
-            ghostAnimator.enabled = false;
+            animator.enabled = false;
             visualMapper.globalBlend = 0f; 
 
             // Tell the parkour script to stop reading input
@@ -107,7 +108,7 @@ namespace ActiveRagoll
 
             // Your future plan goes here: 
             // trigger "Lying Back" animation on ghostAnimator, then blend.
-            ghostAnimator.enabled = true;
+            animator.enabled = true;
             StartCoroutine(RecoveryBlendCoroutine());
         }
 
@@ -127,7 +128,7 @@ namespace ActiveRagoll
         {
             _isRagdolling = false;
             visualMapper.globalBlend = 1f; 
-            ghostAnimator.enabled = true;
+            animator.enabled = true;
 
             foreach (Rigidbody2D rb in _coreRigidbodies)
             {

@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace ActiveRagoll
 {
@@ -9,8 +10,8 @@ namespace ActiveRagoll
         {
             public string boneName; 
             public Transform visualBone;
-            public Transform ghostBone;
-            public Transform activeBone;
+            public Transform animationBone;
+            public Transform activeRagdollBone;
             
             [Tooltip("Check this ONLY for the main Pelvis/Torso root bone")]
             public bool isRoot;
@@ -23,8 +24,8 @@ namespace ActiveRagoll
 
         [Header("Auto-Mapper Roots")]
         public Transform visualRigRoot;
-        public Transform ghostRigRoot;
-        public Transform activeRigRoot;
+        [FormerlySerializedAs("ghostRigRoot")] public Transform animationRigRoot;
+        [FormerlySerializedAs("activeRigRoot")] public Transform activeRagdollRigRoot;
 
         [Header("Global Blend (1 = Animation, 0 = Physics)")]
         [Range(0f, 1f)] public float globalBlend = 1f;
@@ -47,9 +48,9 @@ namespace ActiveRagoll
             {
                 foreach (var bone in bones)
                 {
-                    if (bone.activeBone != null)
+                    if (bone.activeRagdollBone != null)
                     {
-                        bone.activeRb = bone.activeBone.GetComponent<Rigidbody2D>();
+                        bone.activeRb = bone.activeRagdollBone.GetComponent<Rigidbody2D>();
                     }
                 }
             }
@@ -58,7 +59,7 @@ namespace ActiveRagoll
         [ContextMenu("Auto Map Bones")]
         public void AutoMapBones()
         {
-            if (visualRigRoot == null || ghostRigRoot == null || activeRigRoot == null)
+            if (visualRigRoot == null || animationRigRoot == null || activeRagdollRigRoot == null)
             {
                 Debug.LogError("Auto-Mapper failed: Assign all three Root transforms first.");
                 return;
@@ -74,8 +75,8 @@ namespace ActiveRagoll
                 {
                     boneName = targetName,
                     visualBone = visualBones[i],
-                    ghostBone = FindBoneByName(ghostRigRoot, targetName),
-                    activeBone = FindBoneByName(activeRigRoot, targetName),
+                    animationBone = FindBoneByName(animationRigRoot, targetName),
+                    activeRagdollBone = FindBoneByName(activeRagdollRigRoot, targetName),
                     isRoot = (i == 0),
                     isPurePhysics = targetName.Contains("Dread"),
                 };
@@ -101,19 +102,19 @@ namespace ActiveRagoll
             foreach (var bone in bones)
             {
                 // Ignore dreads (they are dynamic) or missing bones
-                if (bone.isPurePhysics || bone.activeBone == null || bone.ghostBone == null) continue;
+                if (bone.isPurePhysics || bone.activeRagdollBone == null || bone.animationBone == null) continue;
 
                 // If it has a Kinematic Rigidbody, move it using the physics engine properly
                 if (bone.activeRb != null && bone.activeRb.bodyType == RigidbodyType2D.Kinematic)
                 {
-                    bone.activeRb.MovePosition(bone.ghostBone.position);
-                    bone.activeRb.MoveRotation(bone.ghostBone.rotation);
+                    bone.activeRb.MovePosition(bone.animationBone.position);
+                    bone.activeRb.MoveRotation(bone.animationBone.rotation);
                 }
                 else
                 {
                     // Fallback just in case
-                    bone.activeBone.position = bone.ghostBone.position;
-                    bone.activeBone.rotation = bone.ghostBone.rotation;
+                    bone.activeRagdollBone.position = bone.animationBone.position;
+                    bone.activeRagdollBone.rotation = bone.animationBone.rotation;
                 }
             }
         }
@@ -125,15 +126,15 @@ namespace ActiveRagoll
 
             foreach (var bone in bones)
             {
-                if (bone.visualBone == null || bone.ghostBone == null || bone.activeBone == null) continue;
+                if (bone.visualBone == null || bone.animationBone == null || bone.activeRagdollBone == null) continue;
 
                 float currentBlend = bone.isPurePhysics ? 0f : globalBlend;
 
-                bone.visualBone.rotation = Quaternion.Slerp(bone.activeBone.rotation, bone.ghostBone.rotation, currentBlend);
+                bone.visualBone.rotation = Quaternion.Slerp(bone.activeRagdollBone.rotation, bone.animationBone.rotation, currentBlend);
 
                 if (bone.isRoot)
                 {
-                    bone.visualBone.position = Vector3.Lerp(bone.activeBone.position, bone.ghostBone.position, currentBlend);
+                    bone.visualBone.position = Vector3.Lerp(bone.activeRagdollBone.position, bone.animationBone.position, currentBlend);
                 }
             }
         }

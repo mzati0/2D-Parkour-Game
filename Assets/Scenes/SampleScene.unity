@@ -688,7 +688,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 96024679}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0.9225718, w: -0.38582563}
+  m_LocalRotation: {x: -0, y: -0, z: -0.70714706, w: -0.7070666}
   m_LocalPosition: {x: 0.3051332, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -823,7 +823,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 135135891}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: 0.9003732, w: 0.4351186}
+  m_LocalRotation: {x: -0, y: -0, z: 0.00015041178, w: 1}
   m_LocalPosition: {x: 0.4988092, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -1295,8 +1295,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ActiveRagoll.VisualSkeletonMapper
   visualRigRoot: {fileID: 1729524567}
-  ghostRigRoot: {fileID: 74384891}
-  activeRigRoot: {fileID: 1002788680}
+  animationRigRoot: {fileID: 74384891}
+  activeRagdollRigRoot: {fileID: 1002788680}
   globalBlend: 1
   bones: []
 --- !u!1 &250634932 stripped
@@ -1741,7 +1741,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8653719598885068355, guid: 7e7a7d64020c73b41aa6a538beabfcc8, type: 3}
       propertyPath: m_Name
-      value: Active_Rig
+      value: Active Ragdoll Rig
       objectReference: {fileID: 0}
     - target: {fileID: -8653719598885068355, guid: 7e7a7d64020c73b41aa6a538beabfcc8, type: 3}
       propertyPath: m_Layer
@@ -13608,7 +13608,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1780514234}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0.7059584, w: 0.7082533}
+  m_LocalRotation: {x: -0, y: -0, z: -0.70695055, w: 0.70726305}
   m_LocalPosition: {x: 0.5032441, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -13863,9 +13863,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d133bd567a74985438b7969883f0ef4c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ActiveRagoll.RagdollStateManager
-  ghostAnimator: {fileID: 1831967232}
+  animator: {fileID: 1831967232}
   visualMapper: {fileID: 230778212}
-  activePelvis: {fileID: 1002788680}
+  activeRagdollRoot: {fileID: 1002788680}
   playerRoot: {fileID: 1795942928}
   playerRootRb: {fileID: 1795942930}
   playerCollider: {fileID: 1795942932}
@@ -14128,7 +14128,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1822250467}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0.76150554, w: 0.6481584}
+  m_LocalRotation: {x: -0, y: -0, z: 0.00092832744, w: 0.99999964}
   m_LocalPosition: {x: 0.3209285, y: -0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -14289,7 +14289,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8653719598885068355, guid: 7e7a7d64020c73b41aa6a538beabfcc8, type: 3}
       propertyPath: m_Name
-      value: Ghost Rig
+      value: Animation Rig
       objectReference: {fileID: 0}
     - target: {fileID: -8653719598885068355, guid: 7e7a7d64020c73b41aa6a538beabfcc8, type: 3}
       propertyPath: m_IsActive
