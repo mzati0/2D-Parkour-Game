@@ -78,7 +78,7 @@ namespace ActiveRagoll
                     animationBone = FindBoneByName(animationRigRoot, targetName),
                     activeRagdollBone = FindBoneByName(activeRagdollRigRoot, targetName),
                     isRoot = (i == 0),
-                    isPurePhysics = targetName.Contains("Dread"),
+                    isPurePhysics = (targetName.Contains("Dread") || targetName.Contains("Jacket")),
                 };
             }
         }

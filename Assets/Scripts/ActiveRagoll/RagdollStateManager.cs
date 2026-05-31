@@ -32,7 +32,7 @@ namespace ActiveRagoll
             
             foreach (Rigidbody2D rb in allRigidbodies)
             {
-                if (rb.gameObject.name.Contains("Dread"))
+                if (rb.gameObject.name.Contains("Dread") || rb.gameObject.name.Contains("Jacket"))
                 {
                     rb.bodyType = RigidbodyType2D.Dynamic;
                     // Ensure these don't fall asleep
