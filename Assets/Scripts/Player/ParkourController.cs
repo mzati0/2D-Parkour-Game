@@ -817,6 +817,7 @@ private bool CalculateParkourMatrix(bool isTricking)
         {
             isSliding = true;
             DisplayAction("SLIDE!", slideColor);
+            ghostAnimator.SetTrigger("Slide");
             ApplyDownVisuals(slideColor);
         }
 
@@ -1149,8 +1150,9 @@ private bool CalculateParkourMatrix(bool isTricking)
 
             // Contextual States
             // ghostAnimator.SetBool("IsGrounded", isGrounded);
-            // ghostAnimator.SetBool("IsSliding", isSliding);
-            // ghostAnimator.SetBool("IsCrouching", isCrouching);
+            ghostAnimator.SetBool("IsSliding", isSliding);
+            ghostAnimator.SetBool("IsCrouching", isCrouching);
+            print(isCrouching);
             // ghostAnimator.SetBool("IsWallSliding", isWallSliding);
             
             // 1. Send Vertical Velocity to Animator
