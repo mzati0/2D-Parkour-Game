@@ -3,6 +3,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
+using ActiveRagoll; 
 
 namespace Player
 {
@@ -15,11 +16,14 @@ namespace Player
         private CapsuleCollider2D capsuleCollider2D;
         [SerializeField] private GameObject sprites;
         public Animator ghostAnimator;
+        
+        [Header("External Systems")]
+        public RagdollStateManager ragdollManager; 
 
         [Header("State Flags")]
         public bool isVaulting;
+        public bool isClimbing; 
         public bool isGrounded;
-        public bool isStumbling;
         public bool isSliding;
         public bool isCrouching;
         public bool isHanging;
@@ -27,9 +31,11 @@ namespace Player
         public bool isScrambling;
         public bool isWallSliding;
         public bool isFlushWall;
+        public bool isVulnerable; 
+        
         private bool hasScrambled; 
         private Collider2D currentLedge;
-        private float stumbleTimer = 1f;
+        private float defaultGravity; 
         #endregion
 
         #region 2. VARIABLES: Physics & Movement
@@ -51,19 +57,18 @@ namespace Player
         public float springboardForce = 25f;
 
         [Header("Wall Movement")]
-        public float wallScrambleSpeed = 12f;
+        public float wallScrambleSpeed = 6f; 
         public float wallScrambleDuration = 0.35f;
         public float wallSlideSpeed = 4f;
     
         [Header("Spatial Data")]
-        [Tooltip("Locked to 1f so raycasts do not flip when walking backwards.")]
         public float facingDirection = 1f; 
         private float lockedFacingDirection = 1f;
         private float animationDirection = 1f;
         public float playerWidth = 1f;
         #endregion
 
-        #region 3. VARIABLES: Flow System
+        #region 3. VARIABLES: Flow System & Vault Library
         [Header("Flow System")]
         public float maxFlowMeter = 100f;
         public float currentFlowMeter = 100f; 
@@ -71,7 +76,6 @@ namespace Player
         public float burstCost = 30f;
         public float maxBurstActivationSpeed = 8f; 
         
-        [Tooltip("Current active top speed, dynamically scaled by Flow.")]
         public float topSpeed = 12f;
         public float minTopSpeed = 36f; 
         public float maxTopSpeed = 45f; 
@@ -83,17 +87,18 @@ namespace Player
         public float flowDecayRate = 50f; 
         public float flowDecaySpeedThreshold = 5f;
         private float currentFlowRegenRate;
-        #endregion
-        
-        [Header("Animation Curves")]
-        public AnimationCurve vaultArc = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
-        public AnimationCurve mantleArc = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
-        
+
         [Header("Climb Customization")]
         public AnimationCurve climbYCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f); 
         public AnimationCurve climbXCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f); 
         public float climbAnimationDuration = 1.1f;
         
+        [Header("Vault Library Arrays")]
+        public VaultData[] speedVaults;
+        public VaultData[] trickVaults;
+        public VaultData[] speedKongs;
+        public VaultData[] trickKongs;
+        #endregion
 
         #region 4. VARIABLES: Multi-Sensor Array
         [Header("Multi-Sensor Array")]
@@ -109,14 +114,14 @@ namespace Player
         public Vector2 waistBoxSize = new(0.2f, 0.3f);
         public Vector2 shinBoxSize = new(0.2f, 0.3f);
         public Vector2 toeBoxSize = new(0.2f, 0.1f);
-        public float sensorCastDistance = 2f;
+        
+        public float sensorCastDistance = 10f; 
         public float wallContactThreshold = 1f; 
         public float groundCheckDistance = 0.2f;
         
         public LayerMask obstacleLayer;
         public LayerMask groundLayer;
 
-        // Internal Sensor Memory
         private bool isCollidingFront;
         private RaycastHit2D headHit;
         private RaycastHit2D chestHit;
@@ -155,7 +160,8 @@ namespace Player
             if (cubeSprite == null) cubeSprite = GetComponent<SpriteRenderer>(); 
             if (cubeSprite) cubeSprite.color = normalColor;
             
-            facingDirection = 1f; // Hard-lock facing direction on startup
+            facingDirection = 1f; 
+            defaultGravity = rb.gravityScale; 
         }
 
         private void OnEnable()
@@ -188,16 +194,18 @@ namespace Player
         {
             if (isRagdolling)
             {
-                rb.linearVelocity = Vector2.zero; 
+                CheckGrounded(); 
                 HandleUI(); 
                 return; 
             }
+            
+            ScanFrontObstacles(); 
             isFlushWall = (chestHit.collider && chestHit.distance <= wallContactThreshold) &&
                           (waistHit.collider && waistHit.distance <= wallContactThreshold) &&
                           (shinHit.collider && shinHit.distance <= wallContactThreshold) &&
                           (toeHit.collider && toeHit.distance <= wallContactThreshold);
+            
             CheckGrounded();
-            ScanFrontObstacles(); 
             
             if (!isGrounded && (isSliding || isCrouching)) StandUp();
             
@@ -211,17 +219,12 @@ namespace Player
             HandleWallSlide();
             CheckAirborneLedgeGrab();
 
-            if (isStumbling && !isVaulting)
-            {
-                HandleStumbleDeceleration();
-                return;
-            }
+    
         
             HandleFlowEconomy();
             HandleMovement();
             HandleCrouchAndSlide();
             HandleParkourHold();
-            HandlePassiveStumble();
             HandleAnimation();
             HandleUI(); 
         }
@@ -230,12 +233,12 @@ namespace Player
         #region INPUT HANDLERS
         private void OnJump(InputAction.CallbackContext context)
         {
-            if (isVaulting) 
+            if (isVaulting && !isClimbing) 
             {
                 Springboard();
                 return;
             }
-            if (isStumbling || isSliding || isCrouching || isHanging) return;
+            if (isSliding || isCrouching || isHanging || isVulnerable || isRagdolling) return;
 
             Vector2 moveInput = moveAction.action.ReadValue<Vector2>();
             bool holdingForward = Mathf.Abs(moveInput.x) > 0.1f && Mathf.Approximately(Mathf.Sign(moveInput.x), facingDirection);
@@ -259,16 +262,47 @@ namespace Player
             ghostAnimator.SetTrigger("Jump");
         }
 
+        private Coroutine trickBufferCoroutine;
+
         private void OnTrickTap(InputAction.CallbackContext context)
         {
-            if (isVaulting || !isGrounded || isStumbling) return; 
-            currentFlowMeter = Mathf.Clamp(currentFlowMeter + 10f, 0, maxFlowMeter);
-            FireParkourAction(true);
+            if (isVaulting || !isGrounded || isRagdolling || isVulnerable || isClimbing) return; 
+            if (!isCollidingFront) return; 
+
+            // THE FIX: Start a 200ms input buffer instead of an instant pass/fail check.
+            if (trickBufferCoroutine != null) StopCoroutine(trickBufferCoroutine);
+            trickBufferCoroutine = StartCoroutine(TrickBufferRoutine());
+        }
+
+        private IEnumerator TrickBufferRoutine()
+        {
+            float bufferTime = 0.25f; // 250ms grace period 
+            
+            while (bufferTime > 0f)
+            {
+                if (isVaulting || isRagdolling || isVulnerable || isClimbing) yield break;
+
+                // Try to perform the trick every frame for 0.25 seconds
+                if (FireParkourAction(true))
+                {
+                    currentFlowMeter = Mathf.Clamp(currentFlowMeter + 10f, 0, maxFlowMeter);
+                    yield break; // Success! Exit the coroutine.
+                }
+                
+                bufferTime -= Time.deltaTime;
+                yield return null;
+            }
+
+            // THE FIX: Only penalize if the buffer completely expired AND you were actually in faceplant range
+            if (waistHit.collider && waistHit.distance <= 2f)
+            {
+                StartCoroutine(VulnerableRoutine());
+            }
         }
 
         private void OnFlowBurst(InputAction.CallbackContext context)
         {
-            if (!isGrounded || isVaulting || isStumbling || isSliding || isCrouching) return;
+            if (!isGrounded || isVaulting || isSliding || isCrouching || isRagdolling) return;
 
             if (Mathf.Abs(rb.linearVelocity.x) > maxBurstActivationSpeed)
             {
@@ -290,7 +324,7 @@ namespace Player
         #region CORE MOVEMENT
         private void HandleMovement()
         {
-            if (isVaulting || isHanging || isScrambling || isWallSliding) return; 
+            if (isVaulting || isHanging || isScrambling || isWallSliding || isClimbing) return; 
 
             if (isSliding)
             {
@@ -306,11 +340,10 @@ namespace Player
             if (Mathf.Abs(moveVector.x) > 0.1f) 
             {
                 float inputDirection = Mathf.Sign(moveVector.x); 
-                animationDirection = inputDirection; // Send input intention to the animator
+                animationDirection = inputDirection; 
                 
                 bool isMovingBackward = !Mathf.Approximately(inputDirection, facingDirection);
                 
-                // Halve the active top speed if moving backwards
                 float activeSpeedLimit = isMovingBackward ? (topSpeed * 0.4f) : topSpeed;
                 
                 targetSpeed = inputDirection * (isCrouching ? activeSpeedLimit * crouchSpeedMultiplier : activeSpeedLimit);
@@ -318,7 +351,6 @@ namespace Player
                 float accelToUse = accelerationRate;
                 if (!isGrounded) accelToUse *= airControlMultiplier; 
 
-                // Turnaround penalty
                 if (!Mathf.Approximately(inputDirection, Mathf.Sign(currentVelocityX)) && Mathf.Abs(currentVelocityX) > 0.5f)
                 {
                     accelToUse *= turnaroundMultiplier; 
@@ -337,7 +369,7 @@ namespace Player
 
         private void HandleCrouchAndSlide()
         {
-            if (!isGrounded || isVaulting || isStumbling) return;
+            if (!isGrounded || isVaulting || isClimbing) return;
 
             float inputY = moveAction.action.ReadValue<Vector2>().y;
             bool wantsToGoDown = inputY < -0.5f; 
@@ -370,7 +402,7 @@ namespace Player
             topSpeed = Mathf.Lerp(minTopSpeed, maxTopSpeed, currentFlowRatio);
             accelerationRate = Mathf.Lerp(minAcceleration, maxAcceleration, currentFlowRatio);
 
-            if (currentAbsSpeed < flowDecaySpeedThreshold && isGrounded && !isVaulting)
+            if (currentAbsSpeed < flowDecaySpeedThreshold && isGrounded && !isVaulting && !isClimbing)
             {
                 currentFlowRegenRate = -flowDecayRate;
                 currentFlowMeter += currentFlowRegenRate * Time.deltaTime;
@@ -416,12 +448,7 @@ namespace Player
 
         private void CheckWallScramble()
         {
-            if (isGrounded || isScrambling || isVaulting || isHanging || hasScrambled) return;
-
-            bool isFlushWall = (chestHit.collider && chestHit.distance <= wallContactThreshold) &&
-                               (waistHit.collider && waistHit.distance <= wallContactThreshold) &&
-                               (shinHit.collider && shinHit.distance <= wallContactThreshold) &&
-                               (toeHit.collider && toeHit.distance <= wallContactThreshold);
+            if (isGrounded || isScrambling || isVaulting || isHanging || hasScrambled || isClimbing) return;
 
             if (!isFlushWall) return;
 
@@ -438,7 +465,7 @@ namespace Player
 
         private void HandleWallSlide()
         {
-            if (isGrounded || isScrambling || isVaulting || isHanging) 
+            if (isGrounded || isScrambling || isVaulting || isHanging || isClimbing) 
             {
                 isWallSliding = false;
                 return;
@@ -463,36 +490,24 @@ namespace Player
 
         private void CheckAirborneLedgeGrab()
         {
-            if (isGrounded || isVaulting || isScrambling || rb.linearVelocity.y > 0.1f) return; 
+            if (isGrounded || isVaulting || isClimbing || (!isScrambling && rb.linearVelocity.y > 0.1f)) return; 
 
             float ledgeCatchRadius = wallContactThreshold + 0.2f; 
+            
             bool isChestHit = chestHit.collider && chestHit.distance <= ledgeCatchRadius;
-            bool isWaistHit = waistHit.collider && waistHit.distance <= ledgeCatchRadius;
             bool headClear = !headHit.collider || headHit.distance > ledgeCatchRadius;
 
-            if ((isChestHit || isWaistHit) && headClear)
+            if (isChestHit && headClear)
             {
-                Collider2D wallCollider = isChestHit ? this.chestHit.collider : this.waistHit.collider;
-                Vector2 hitPoint = isChestHit ? this.chestHit.point : this.waistHit.point;
+                Collider2D wallCollider = chestHit.collider;
+                Vector2 hitPoint = chestHit.point;
                 
                 Vector2 rayOrigin = new Vector2(hitPoint.x + (facingDirection * 0.1f), hitPoint.y + 1.5f);
                 RaycastHit2D downHit = Physics2D.Raycast(rayOrigin, Vector2.down, 2.5f, obstacleLayer);
 
                 if (downHit.collider)
                 {
-                    Vector2 moveInput = moveAction.action.ReadValue<Vector2>();
-                    bool holdingForward = Mathf.Abs(moveInput.x) > 0.1f && Mathf.Approximately(Mathf.Sign(moveInput.x), facingDirection);
-                    bool holdingUp = moveInput.y > 0.5f;
-
-                    if (holdingForward || holdingUp)
-                    {
-                        DisplayAction("AUTO MANTLE!", Color.cyan);
-                        StartCoroutine(MantleRoutine(wallCollider));
-                    }
-                    else
-                    {
-                        SnapToLedge(hitPoint, downHit.point.y, wallCollider);
-                    }
+                    SnapToLedge(hitPoint, downHit.point.y, wallCollider);
                 }
             }
         }
@@ -500,6 +515,7 @@ namespace Player
         private void SnapToLedge(Vector2 wallHitPoint, float trueTopY, Collider2D ledgeCollider)
         {
             isHanging = true;
+            isScrambling = false; 
             currentLedge = ledgeCollider;
             rb.bodyType = RigidbodyType2D.Kinematic;
             rb.linearVelocity = Vector2.zero;
@@ -522,7 +538,6 @@ namespace Player
             if (inputY > 0.5f) 
             {
                 isHanging = false;
-                DisplayAction("CLIMB!", Color.white);
                 if (currentLedge) StartCoroutine(ClimbRoutine(currentLedge));
                 ghostAnimator.SetTrigger("Climb");
             }
@@ -531,7 +546,6 @@ namespace Player
                 isHanging = false;
                 rb.bodyType = RigidbodyType2D.Dynamic;
                 currentLedge = null;
-                DisplayAction("DROP", Color.gray);
             }
         }
 
@@ -541,43 +555,71 @@ namespace Player
             return CalculateParkourMatrix(isTricking); 
         }
 
-        private bool CalculateParkourMatrix(bool isTricking)
+     private bool CalculateParkourMatrix(bool isTricking)
         {
             if (waistHit.collider && !chestHit.collider)
             {
                 float trueTopY;
                 float obstacleDepth = CalculateObstacleDepth(waistHit, out trueTopY);
                 float exactHeightToClear = (trueTopY - transform.position.y);
+                float currentDistance = waistHit.distance;
 
-                if (obstacleDepth < 1.0f)
+                if (obstacleDepth <= 1.5f)
                 {
-                    float duration = isTricking ? 0.4f : 0.2f;
-                    DisplayAction(isTricking ? "TRICK VAULT!" : "SPEED VAULT!", isTricking ? Color.cyan : Color.white);
-                    StartCoroutine(VaultRoutine(waistHit.collider, duration, exactHeightToClear));
+                    VaultData selectedVault = GetHighestPriorityVault(isTricking ? trickVaults : speedVaults, currentDistance);
+                    
+                    // THE FIX: If no vault fits (because they wanted to Kong a thin wall), check Kongs as a fallback!
+                    if (selectedVault == null) 
+                    {
+                        selectedVault = GetHighestPriorityVault(isTricking ? trickKongs : speedKongs, currentDistance);
+                    }
+
+                    if (selectedVault != null)
+                    {
+                        DisplayAction(isTricking ? "TRICK VAULT!" : "SPEED VAULT!", isTricking ? Color.cyan : Color.white);
+                        StartCoroutine(VaultRoutine(waistHit.collider, exactHeightToClear, selectedVault));
+                        return true;
+                    }
                 }
                 else if (obstacleDepth <= 3.5f)
                 {
-                    float duration = isTricking ? 0.7f : 0.4f;
-                    DisplayAction(isTricking ? "TRICK KONG!" : "SPEED KONG!", isTricking ? Color.cyan : Color.white);
-                    StartCoroutine(VaultRoutine(waistHit.collider, duration, exactHeightToClear));
+                    VaultData selectedVault = GetHighestPriorityVault(isTricking ? trickKongs : speedKongs, currentDistance);
+                    if (selectedVault != null)
+                    {
+                        DisplayAction(isTricking ? "TRICK KONG!" : "SPEED KONG!", isTricking ? Color.cyan : Color.white);
+                        StartCoroutine(VaultRoutine(waistHit.collider, exactHeightToClear, selectedVault));
+                        return true;
+                    }
                 }
-                else
+                else if (!isTricking) 
                 {
-                    DisplayAction("Mantle!", Color.white);
                     StartCoroutine(MantleRoutine(waistHit.collider));
+                    return true;
                 }
-                return true; 
-            }
-
-            if ((shinHit.collider || toeHit.collider) && !waistHit.collider)
-            {
-                float duration = isTricking ? 0.4f : 0.2f;
-                DisplayAction(isTricking ? "TRICK HOP!" : "SPEED STEP!", isTricking ? Color.cyan : Color.white);
-                StartCoroutine(VaultRoutine(shinHit.collider ? shinHit.collider : toeHit.collider, duration, 0.1f));
-                return true; 
             }
 
             return false; 
+        }
+        
+        private VaultData GetHighestPriorityVault(VaultData[] vaultArray, float currentDistance = -1f)
+        {
+            if (vaultArray == null || vaultArray.Length == 0) return null;
+            
+            VaultData bestVault = null;
+            
+            for (int i = 0; i < vaultArray.Length; i++)
+            {
+                if (currentDistance >= 0f)
+                {
+                    if (currentDistance < vaultArray[i].minDistance || currentDistance > vaultArray[i].maxDistance) continue;
+                }
+                
+                if (bestVault == null || vaultArray[i].priorityScore > bestVault.priorityScore)
+                {
+                    bestVault = vaultArray[i];
+                }
+            }
+            return bestVault;
         }
 
         private float CalculateObstacleDepth(RaycastHit2D forwardHit, out float trueTopY)
@@ -620,57 +662,30 @@ namespace Player
             return maxSearchDistance; 
         }
 
+        private void InitiateWipeout()
+        {
+            // STOP the other coroutines safely without killing ourselves
+            StopAllCoroutines();
+            
+            isVaulting = false;
+            isClimbing = false;
+            isScrambling = false;
+            isVulnerable = false;
+            
+            StartCoroutine(RagdollWipeoutRoutine());
+        }
+
         private void OnCollisionEnter2D(Collision2D collision)
         {
-            if (isVaulting || !isGrounded || isStumbling || parkourAction.action.IsPressed() || isHanging || isScrambling) return;
+            if (isRagdolling) return;
 
-            if (((1 << collision.gameObject.layer) & obstacleLayer) != 0)
+            // Vulnerable Smash Check: Slamming a wall while vulnerable triggers instant communication with the Ragdoll Manager.
+            if (isVulnerable && ((1 << collision.gameObject.layer) & obstacleLayer) != 0)
             {
                 ContactPoint2D contact = collision.GetContact(0);
-                
-                if (Mathf.Abs(contact.normal.x) > 0.5f)
+                if (Mathf.Abs(contact.normal.x) > 0.5f) 
                 {
-                    if (waistHit.collider || chestHit.collider || headHit.collider) return;
-
-                    bool isShinHigh = shinHit.collider; 
-                    bool isToeHigh = toeHit.collider && !shinHit.collider;
-
-                    if (!isShinHigh && !isToeHigh) return; 
-
-                    float currentSpeed = Mathf.Abs(rb.linearVelocity.x);
-                    float speed10 = 3.33f; 
-                    float speed24 = 8.0f;  
-                    float speed36 = 12.0f; 
-
-                    int severity = 0; 
-
-                    if (isShinHigh)
-                    {
-                        if (currentSpeed < speed10) severity = 1;
-                        else if (currentSpeed < speed24) severity = 2;
-                        else severity = 3;
-                    }
-                    else if (isToeHigh)
-                    {
-                        if (currentSpeed < speed10) severity = 0;
-                        else if (currentSpeed < speed24) severity = 1;
-                        else if (currentSpeed < speed36) severity = 2;
-                        else severity = 3;
-                    }
-
-                    if (severity == 0) return;
-
-                    if (severity < 3 && currentFlowMeter >= 50f)
-                    {
-                        currentFlowMeter -= 50f;
-                        DisplayAction("STUMBLE PROTECTED!", Color.cyan);
-                        if (cubeSprite) cubeSprite.color = Color.cyan;
-                        
-                        StartCoroutine(VaultRoutine(collision.collider, 0.2f, 0.15f));
-                        return;
-                    }
-
-                    StartCoroutine(DynamicStumbleRoutine(collision.collider, severity));
+                    InitiateWipeout();
                 }
             }
         }
@@ -699,7 +714,6 @@ namespace Player
         private void StartCrouch()
         {
             isCrouching = true;
-            DisplayAction("CROUCH!", crouchColor);
             ApplyDownVisuals(crouchColor);
         }
 
@@ -707,7 +721,6 @@ namespace Player
         {
             isSliding = false;
             isCrouching = true;
-            DisplayAction("CROUCH WALK", crouchColor);
             ApplyDownVisuals(crouchColor);
         }
 
@@ -722,68 +735,88 @@ namespace Player
             if (cubeSprite) cubeSprite.color = normalColor;
         }
 
-        private void HandlePassiveStumble()
-        {
-            if (isVaulting || !isGrounded || isStumbling || parkourAction.action.IsPressed()) return;
-
-            if (toeHit.collider && !waistHit.collider)
-            {
-                float trueTopY;
-                float obstacleDepth = CalculateObstacleDepth(toeHit, out trueTopY);
-
-                bool isVaultableSize = obstacleDepth < 1.5f;
-                float armorCost = 50f; 
-
-                if (isVaultableSize && currentFlowMeter >= armorCost)
-                {
-                    currentFlowMeter -= armorCost;
-                    DisplayAction("STUMBLE PROTECTED!", Color.cyan);
-                    if (cubeSprite) cubeSprite.color = Color.cyan;
-                    StartCoroutine(VaultRoutine(toeHit.collider, 0.2f, 0.1f)); 
-                }
-                else
-                {
-                    StartCoroutine(StumbleRoutine(toeHit.collider));
-                }
-            }
-        }
-
         private void HandleParkourHold()
         {
-            if (isVaulting || !isGrounded || isStumbling) return; 
+            if (isVaulting || !isGrounded || isVulnerable || isClimbing || isRagdolling) return; 
             if (parkourAction.action.IsPressed()) FireParkourAction(false);
         }
 
-        private void HandleStumbleDeceleration()
-        {
-            stumbleTimer -= Time.deltaTime;
         
-            float speedMultiplier = Mathf.Clamp01(stumbleTimer / 3f); 
-            rb.linearVelocity = new Vector2(lockedFacingDirection * topSpeed * speedMultiplier, rb.linearVelocity.y);
-
-            if (stumbleTimer <= 0f)
-            {
-                isStumbling = false;
-                if (cubeSprite) cubeSprite.color = normalColor;
-                DisplayAction("RECOVERED", Color.white);
-            }
-        }
         #endregion
 
         #region COROUTINES
+        private IEnumerator RagdollWipeoutRoutine()
+        {
+            DisplayAction("WIPEOUT!", Color.red);
+            if (cubeSprite) cubeSprite.color = Color.red;
+
+            rb.linearVelocity = new Vector2(-facingDirection * 5f, 5f);
+            
+            if (ragdollManager != null) 
+            {
+                ragdollManager.TriggerRagdollDrop();
+            }
+            else 
+            {
+                isRagdolling = true;
+                ghostAnimator.enabled = false;
+            }
+
+            yield return new WaitForSeconds(0.5f);
+
+            // THE FIX: Wait for the ragdoll's physical momentum to settle instead of relying on the foot raycast.
+            Rigidbody2D pelvisRb = ragdollManager != null ? ragdollManager.activeRagdollRoot.GetComponent<Rigidbody2D>() : rb;
+            
+            while (isRagdolling && pelvisRb != null && pelvisRb.linearVelocity.magnitude > 0.5f)
+            {
+                yield return null;
+            }
+
+            // THE FIX: If the player manually pressed T to recover during the fall, abort the automated timer.
+            if (!isRagdolling) yield break;
+
+            yield return new WaitForSeconds(2f);
+
+            // One last check in case they pressed T during the exact 2-second wait
+            if (!isRagdolling) yield break;
+
+            if (ragdollManager != null) 
+            {
+                ragdollManager.TriggerRecovery();
+            }
+            else 
+            {
+                isRagdolling = false;
+                ghostAnimator.enabled = true; 
+            }
+
+            ghostAnimator.Play("Still Land"); 
+            if (cubeSprite) cubeSprite.color = normalColor;
+            DisplayAction("RECOVERED", Color.white);
+        }
+
+        private IEnumerator VulnerableRoutine()
+        {
+            isVulnerable = true;
+            DisplayAction("MISSED TRICK!", Color.yellow);
+            yield return new WaitForSeconds(1.5f);
+            isVulnerable = false;
+        }
+
         private IEnumerator WallScrambleRoutine()
         {
             isScrambling = true;
-            DisplayAction("SCRAMBLE!", Color.white);
             
             float timePassed = 0f;
             
             while (timePassed < wallScrambleDuration && isCollidingFront)
             {
+                if (isRagdolling) yield break; 
+                
                 timePassed += Time.deltaTime;
                 rb.linearVelocity = new Vector2(0f, wallScrambleSpeed); 
                 
-                if (isHanging || isVaulting) 
+                if (isHanging || isVaulting || isClimbing) 
                 {
                     isScrambling = false;
                     yield break; 
@@ -795,45 +828,92 @@ namespace Player
             isScrambling = false;
         }
         
-        private IEnumerator VaultRoutine(Collider2D obstacle, float duration, float extraHeight)
+        private IEnumerator VaultRoutine(Collider2D obstacle, float extraHeight, VaultData vaultData)
         {
             isVaulting = true;
-            float entrySpeedX = rb.linearVelocity.x;
-            rb.bodyType = RigidbodyType2D.Kinematic; 
-            rb.linearVelocity = Vector2.zero;
-            capsuleCollider2D.enabled = false; 
+            float entryVelocityX = rb.linearVelocity.x;
+
+            if (vaultData.isTrick)
+            {
+                //isVulnerable = true;
+                rb.bodyType = RigidbodyType2D.Dynamic;
+                rb.gravityScale = 0f; 
+                capsuleCollider2D.enabled = true; 
+                capsuleCollider2D.size = new Vector2(0.5f, 1f);    
+                capsuleCollider2D.offset = new Vector2(0f, 1.5f);  
+            }
+            else
+            {
+                rb.bodyType = RigidbodyType2D.Kinematic; 
+                capsuleCollider2D.enabled = false; 
+            }
+
+            float speedRatio = Mathf.InverseLerp(minTopSpeed, maxTopSpeed, Mathf.Abs(entryVelocityX));
+            float vaultSpeedMultiplier = Mathf.Lerp(1f, 1.25f, speedRatio); 
+            
+            ghostAnimator.SetFloat("VaultSpeed", vaultSpeedMultiplier);
+            ghostAnimator.SetTrigger(vaultData.animationStateName);
+            
+            float rawClipLength = GetClipLength(vaultData.animationStateName);
+            float dynamicDuration = rawClipLength / vaultSpeedMultiplier; 
 
             Vector2 startPos = transform.position;
-            float clearancePadding = 0.25f;
+            
             float landX = Mathf.Approximately(facingDirection, 1) 
-                ? obstacle.bounds.max.x + (playerWidth / 2f) + clearancePadding 
-                : obstacle.bounds.min.x - (playerWidth / 2f) - clearancePadding;
-        
-            Vector2 endPos = new Vector2(landX, startPos.y + 0.15f); 
+                ? obstacle.bounds.max.x + (playerWidth / 2f) + vaultData.clearancePadding 
+                : obstacle.bounds.min.x - (playerWidth / 2f) - vaultData.clearancePadding;
+
             float heightToClear = (obstacle.bounds.max.y - startPos.y) + extraHeight;
             float timePassed = 0f;
 
-            while (timePassed < duration)
+            while (timePassed < dynamicDuration)
             {
+                if (isRagdolling) yield break; 
+
                 timePassed += Time.deltaTime;
-                float linearT = timePassed / duration;
-                float heightModifier = Mathf.Sin(linearT * Mathf.PI) * heightToClear;
-                Vector2 currentPos = Vector2.Lerp(startPos, endPos, linearT);
-                currentPos.y += heightModifier;
-                rb.MovePosition(currentPos);
+                float t = timePassed / dynamicDuration;
+                
+                float curveY = vaultData.yCurve.Evaluate(t);
+                float curveX = vaultData.xCurve.Evaluate(t);
+                
+                float currentX = Mathf.Lerp(startPos.x, landX, curveX);
+                float currentY = startPos.y + (heightToClear * curveY);
+                
+                rb.MovePosition(new Vector2(currentX, currentY));
                 yield return new WaitForFixedUpdate();
+            }
+
+            if (vaultData.isTrick)
+            {
+                isVulnerable = false;
+                rb.gravityScale = defaultGravity;
+                capsuleCollider2D.size = new Vector2(0.5f, 2f);
+                capsuleCollider2D.offset = new Vector2(0f, 1f); 
             }
 
             capsuleCollider2D.enabled = true; 
             rb.bodyType = RigidbodyType2D.Dynamic; 
+            
+            rb.linearVelocity = new Vector2(entryVelocityX, rb.linearVelocity.y);
+            
             isVaulting = false;
-            rb.linearVelocity = new Vector2(entrySpeedX, rb.linearVelocity.y);
             if (cubeSprite) cubeSprite.color = normalColor;
         }
-        
-        private IEnumerator MantleRoutine(Collider2D obstacle)
+
+        private float GetClipLength(string clipName)
         {
-            isVaulting = true;
+            RuntimeAnimatorController ac = ghostAnimator.runtimeAnimatorController;
+            foreach (AnimationClip clip in ac.animationClips)
+            {
+                if (clip.name == clipName) return clip.length;
+            }
+            Debug.LogWarning($"Clip '{clipName}' not found! Defaulting to 1.1s.");
+            return 1.1f; 
+        }
+        
+       private IEnumerator MantleRoutine(Collider2D obstacle)
+        {
+            isClimbing = true;
             rb.bodyType = RigidbodyType2D.Kinematic; 
             rb.linearVelocity = Vector2.zero;
             capsuleCollider2D.enabled = false;
@@ -852,6 +932,8 @@ namespace Player
             float timePassed = 0f;
             while (timePassed < climbDuration)
             {
+                if (isRagdolling) yield break; 
+                
                 timePassed += Time.deltaTime;
                 float t = timePassed / climbDuration;
                 float easeT = Mathf.Sin(t * Mathf.PI / 2f); 
@@ -864,6 +946,8 @@ namespace Player
         
             while (timePassed < pullDuration)
             {
+                if (isRagdolling) yield break; 
+
                 timePassed += Time.deltaTime;
                 float t = timePassed / pullDuration;
                 rb.MovePosition(new Vector2(Mathf.Lerp(topPos.x, edgeX, t), topY));
@@ -872,34 +956,37 @@ namespace Player
 
             capsuleCollider2D.enabled = true;
             rb.bodyType = RigidbodyType2D.Dynamic; 
-            isVaulting = false;
+            
+            // THE FIX: Hard reset momentum before returning control to the player
+            rb.linearVelocity = Vector2.zero; 
+            
+            isClimbing = false;
         }
+
         private IEnumerator ClimbRoutine(Collider2D obstacle)
         {
-            isVaulting = true;
+            isClimbing = true;
             rb.bodyType = RigidbodyType2D.Kinematic;
             rb.linearVelocity = Vector2.zero;
             capsuleCollider2D.enabled = false;
 
             Vector2 startPos = transform.position;
             float edgeX = Mathf.Approximately(facingDirection, 1) ? obstacle.bounds.min.x + (playerWidth / 2f) : obstacle.bounds.max.x - (playerWidth / 2f);
-            float topY = obstacle.bounds.max.y; //+ (playerWidth / 2f);
+            float topY = obstacle.bounds.max.y; 
 
             float timePassed = 0f;
 
-            // ONE unified loop tied directly to your animation clip length
             while (timePassed < climbAnimationDuration)
             {
+                if (isRagdolling) yield break; 
+
                 timePassed += Time.deltaTime;
         
-                // Converts current time into a 0.0 to 1.0 percentage
                 float t = timePassed / climbAnimationDuration; 
 
-                // Evaluate both curves at this exact percentage
                 float curveY = climbYCurve.Evaluate(t);
                 float curveX = climbXCurve.Evaluate(t);
 
-                // Apply movement independently
                 float currentY = Mathf.Lerp(startPos.y, topY, curveY);
                 float currentX = Mathf.Lerp(startPos.x, edgeX, curveX);
 
@@ -909,100 +996,14 @@ namespace Player
 
             capsuleCollider2D.enabled = true;
             rb.bodyType = RigidbodyType2D.Dynamic;
-            isVaulting = false;
-        }
-        
-        private IEnumerator StumbleRoutine(Collider2D obstacle)
-        {
-            DisplayAction("STUMBLE!", stumbleColor);
-            isVaulting = true;
-            isStumbling = true;
-            if (cubeSprite) cubeSprite.color = stumbleColor;
-        
-            rb.bodyType = RigidbodyType2D.Kinematic; 
-            rb.linearVelocity = Vector2.zero;
-            capsuleCollider2D.enabled = false;
-
-            Vector2 startPos = transform.position;
-            float landX = Mathf.Approximately(facingDirection, 1) ? obstacle.bounds.max.x + (playerWidth / 2f) : obstacle.bounds.min.x - (playerWidth / 2f);
-            Vector2 endPos = new Vector2(landX, startPos.y); 
-
-            float timePassed = 0f;
-            const float duration = 0.4f; 
-
-            while (timePassed < duration)
-            {
-                timePassed += Time.deltaTime;
-                float linearT = timePassed / duration;
-                float sagModifier = Mathf.Sin(linearT * Mathf.PI) * 0.2f; 
-                Vector2 currentPos = Vector2.Lerp(startPos, endPos, linearT);
-                currentPos.y += sagModifier;
-                rb.MovePosition(currentPos);
-                yield return new WaitForFixedUpdate();
-            }
-
-            capsuleCollider2D.enabled = true;
-            rb.bodyType = RigidbodyType2D.Dynamic; 
-            isVaulting = false;
-            lockedFacingDirection = facingDirection;
-
-            float speedRatio = Mathf.Abs(rb.linearVelocity.x) / topSpeed;
-            stumbleTimer = Mathf.Clamp(5f * speedRatio, 1f, 5f);
-        }
-        
-        private IEnumerator DynamicStumbleRoutine(Collider2D obstacle, int severity)
-        {
-            isVaulting = true;
-            isStumbling = true;
             
-            Color flashColor = Color.red;
-            float tripDuration = 0.5f;    
-            float recoveryPenalty = 3f;    
-
-            if (severity == 1) 
-            {
-                flashColor = slideColor; 
-                tripDuration = 0.15f;
-                recoveryPenalty = 0.5f;
-            }
-            else if (severity == 2) 
-            {
-                flashColor = new Color(1f, 0.5f, 0f); 
-                tripDuration = 0.3f;
-                recoveryPenalty = 1.5f;
-            }
-
-            DisplayAction("STUMBLE!", flashColor);
-            if (cubeSprite) cubeSprite.color = flashColor;
-        
-            rb.bodyType = RigidbodyType2D.Kinematic; 
+            // THE FIX: Hard reset momentum before returning control to the player
             rb.linearVelocity = Vector2.zero;
-            capsuleCollider2D.enabled = false;
-
-            Vector2 startPos = transform.position;
-            float landX = Mathf.Approximately(facingDirection, 1) ? obstacle.bounds.max.x + (playerWidth / 2f) : obstacle.bounds.min.x - (playerWidth / 2f);
-            Vector2 endPos = new Vector2(landX, startPos.y); 
-
-            float timePassed = 0f;
-
-            while (timePassed < tripDuration)
-            {
-                timePassed += Time.deltaTime;
-                float linearT = timePassed / tripDuration;
-                float sagModifier = Mathf.Sin(linearT * Mathf.PI) * 0.2f; 
-                Vector2 currentPos = Vector2.Lerp(startPos, endPos, linearT);
-                currentPos.y += sagModifier;
-                rb.MovePosition(currentPos);
-                yield return new WaitForFixedUpdate();
-            }
-
-            capsuleCollider2D.enabled = true;
-            rb.bodyType = RigidbodyType2D.Dynamic; 
-            isVaulting = false;
-            lockedFacingDirection = facingDirection;
-
-            stumbleTimer = recoveryPenalty;
+            
+            isClimbing = false;
         }
+        
+        
         #endregion
 
         #region UI & ANIMATOR
