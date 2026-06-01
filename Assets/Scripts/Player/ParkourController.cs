@@ -461,6 +461,7 @@ namespace Player
             {
                 hasScrambled = true; 
                 StartCoroutine(WallScrambleRoutine());
+                ghostAnimator.SetTrigger("Scramble");
             }
         }
 
