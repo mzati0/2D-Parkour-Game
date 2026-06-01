@@ -705,7 +705,7 @@ namespace Player
             isSliding = false;
             isCrouching = false;
             capsuleCollider2D.offset = new Vector2(0, 1f);
-            capsuleCollider2D.size = new Vector2(1f, 2f);
+            capsuleCollider2D.size = new Vector2(0.5f, 2f);
             sprites.transform.localPosition = Vector3.zero;
             sprites.transform.localRotation = Quaternion.Euler(0f, 0f, 0f);
             if (cubeSprite) cubeSprite.color = normalColor;
