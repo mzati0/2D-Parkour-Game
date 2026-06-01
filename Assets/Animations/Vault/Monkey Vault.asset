@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Player.VaultData
   priorityScore: 0
   minDistance: 0
-  maxDistance: 1.5
+  maxDistance: 1
   isTrick: 0
   animationStateName: Monkey Vault
   xCurve:
@@ -65,4 +65,4 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  clearancePadding: 0.5
+  clearancePadding: 1.5

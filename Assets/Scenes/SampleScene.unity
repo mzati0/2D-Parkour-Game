@@ -13425,6 +13425,7 @@ MonoBehaviour:
   ghostAnimator: {fileID: 1831967232}
   ragdollManager: {fileID: 1795942933}
   isVaulting: 0
+  isTricking: 0
   isClimbing: 0
   isGrounded: 0
   isSliding: 0
@@ -13552,7 +13553,7 @@ MonoBehaviour:
   waistBoxSize: {x: 0.2, y: 0.5}
   shinBoxSize: {x: 0.2, y: 0.4}
   toeBoxSize: {x: 0.2, y: 0.15}
-  sensorCastDistance: 4
+  sensorCastDistance: 5
   wallContactThreshold: 0.35
   groundCheckDistance: 0.2
   obstacleLayer:
@@ -16720,8 +16721,8 @@ Transform:
   m_GameObject: {fileID: 2096785967}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 8.53, y: -3.9566, z: 0}
-  m_LocalScale: {x: 2, y: 0.1447362, z: 1}
+  m_LocalPosition: {x: 8.53, y: -3.5, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}

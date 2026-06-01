@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Railflip Vault
   m_EditorClassIdentifier: Assembly-CSharp::Player.VaultData
   priorityScore: 0
-  minDistance: 2
+  minDistance: 1.5
   maxDistance: 3
   isTrick: 1
   animationStateName: Railflip Vault

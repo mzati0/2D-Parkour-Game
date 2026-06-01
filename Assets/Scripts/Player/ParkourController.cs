@@ -22,6 +22,7 @@ namespace Player
 
         [Header("State Flags")]
         public bool isVaulting;
+        public bool isDoingATricking;
         public bool isClimbing; 
         public bool isGrounded;
         public bool isSliding;
@@ -233,7 +234,7 @@ namespace Player
         #region INPUT HANDLERS
         private void OnJump(InputAction.CallbackContext context)
         {
-            if (isVaulting && !isClimbing) 
+            if (isVaulting && !isClimbing && !isDoingATricking) 
             {
                 Springboard();
                 return;
@@ -555,7 +556,7 @@ namespace Player
             return CalculateParkourMatrix(isTricking); 
         }
 
-     private bool CalculateParkourMatrix(bool isTricking)
+        private bool CalculateParkourMatrix(bool isTricking)
         {
             if (waistHit.collider && !chestHit.collider)
             {
@@ -564,15 +565,13 @@ namespace Player
                 float exactHeightToClear = (trueTopY - transform.position.y);
                 float currentDistance = waistHit.distance;
 
-                if (obstacleDepth <= 1.5f)
+                // 1. Thin Objects (Like your 1x1 cube) -> STRICTLY VAULTS ONLY
+                if (obstacleDepth <= 1.25f)
                 {
                     VaultData selectedVault = GetHighestPriorityVault(isTricking ? trickVaults : speedVaults, currentDistance);
                     
-                    // THE FIX: If no vault fits (because they wanted to Kong a thin wall), check Kongs as a fallback!
-                    if (selectedVault == null) 
-                    {
-                        selectedVault = GetHighestPriorityVault(isTricking ? trickKongs : speedKongs, currentDistance);
-                    }
+                    // THE FIX: The Kong fallback has been completely deleted.
+                    // If you aren't at the right distance for a Vault, it will NOT swap to a Kong.
 
                     if (selectedVault != null)
                     {
@@ -581,7 +580,8 @@ namespace Player
                         return true;
                     }
                 }
-                else if (obstacleDepth <= 3.5f)
+                // 2. Thick Objects -> STRICTLY KONGS ONLY
+                else if (obstacleDepth <= 3f)
                 {
                     VaultData selectedVault = GetHighestPriorityVault(isTricking ? trickKongs : speedKongs, currentDistance);
                     if (selectedVault != null)
@@ -590,11 +590,6 @@ namespace Player
                         StartCoroutine(VaultRoutine(waistHit.collider, exactHeightToClear, selectedVault));
                         return true;
                     }
-                }
-                else if (!isTricking) 
-                {
-                    StartCoroutine(MantleRoutine(waistHit.collider));
-                    return true;
                 }
             }
 
@@ -671,6 +666,7 @@ namespace Player
             isClimbing = false;
             isScrambling = false;
             isVulnerable = false;
+            isDoingATricking = false;
             
             StartCoroutine(RagdollWipeoutRoutine());
         }
@@ -696,6 +692,7 @@ namespace Player
         {
             StopAllCoroutines(); 
             isVaulting = false;
+            isDoingATricking = false;
             capsuleCollider2D.enabled = true;
             rb.bodyType = RigidbodyType2D.Dynamic;
 
@@ -836,6 +833,7 @@ namespace Player
             if (vaultData.isTrick)
             {
                 //isVulnerable = true;
+                isDoingATricking = true;
                 rb.bodyType = RigidbodyType2D.Dynamic;
                 rb.gravityScale = 0f; 
                 capsuleCollider2D.enabled = true; 
@@ -897,6 +895,7 @@ namespace Player
             rb.linearVelocity = new Vector2(entryVelocityX, rb.linearVelocity.y);
             
             isVaulting = false;
+            isDoingATricking = false;
             if (cubeSprite) cubeSprite.color = normalColor;
         }
 
