@@ -3834,4 +3834,11 @@ AnimationClip:
     flags: 0
   m_HasGenericRootTransform: 0
   m_HasMotionFloatCurves: 0
-  m_Events: []
+  m_Events:
+  - time: 0
+    functionName: PlaySpecificSound
+    data: 
+    objectReferenceParameter: {fileID: 8300000, guid: 648b84725bcbc7d4485f88a49f4500af, type: 3}
+    floatParameter: 0
+    intParameter: 0
+    messageOptions: 0

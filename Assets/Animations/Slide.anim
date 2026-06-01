@@ -4450,4 +4450,18 @@ AnimationClip:
     flags: 0
   m_HasGenericRootTransform: 0
   m_HasMotionFloatCurves: 0
-  m_Events: []
+  m_Events:
+  - time: 0
+    functionName: PlaySpecificSound
+    data: 
+    objectReferenceParameter: {fileID: 8300000, guid: 824a9eddfffb57e4383323cbace71a38, type: 3}
+    floatParameter: 0
+    intParameter: 0
+    messageOptions: 0
+  - time: 0.16666667
+    functionName: PlaySpecificSound
+    data: 
+    objectReferenceParameter: {fileID: 8300000, guid: 80b8c052913e2024297bdd6f80ced79f, type: 3}
+    floatParameter: 0
+    intParameter: 0
+    messageOptions: 0

@@ -8166,4 +8166,32 @@ AnimationClip:
     flags: 0
   m_HasGenericRootTransform: 0
   m_HasMotionFloatCurves: 0
-  m_Events: []
+  m_Events:
+  - time: 0
+    functionName: PlaySpecificSound
+    data: 
+    objectReferenceParameter: {fileID: 8300000, guid: 824a9eddfffb57e4383323cbace71a38, type: 3}
+    floatParameter: 0
+    intParameter: 0
+    messageOptions: 0
+  - time: 0.016666668
+    functionName: PlayFootstepSFX
+    data: 
+    objectReferenceParameter: {fileID: 0}
+    floatParameter: 0
+    intParameter: 0
+    messageOptions: 0
+  - time: 0.033333335
+    functionName: PlayFootstepSFX
+    data: 
+    objectReferenceParameter: {fileID: 0}
+    floatParameter: 0
+    intParameter: 0
+    messageOptions: 0
+  - time: 0.51666665
+    functionName: PlaySpecificSound
+    data: 
+    objectReferenceParameter: {fileID: 8300000, guid: 2d98f76f620d5ef4bbf9dd1455badd10, type: 3}
+    floatParameter: 0
+    intParameter: 0
+    messageOptions: 0
