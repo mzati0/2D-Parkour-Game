@@ -894,7 +894,7 @@ MonoBehaviour:
   m_text: "<align=center><size=150%><b>HOW TO PLAY</b></size></align>\n\n<align=center><size=120%><b>CONTROLS</b></size></align>\n\u2022
     <b>Move:</b> Left/Right Arrow Keys\n\u2022 <b>Climb:</b> Up Arrow Key\n\u2022
     <b>Slide/Crouch:</b> Down Arrow Key\n\u2022 <b>Jump:</b> A\n\u2022 <b>Parkour:</b>
-    S\n\u2022 <b>Trick:</b> D\n\u2022 <b>Trick:</b> Shift\n\n<align=center><size=120%><b>MECHANICS</b></size></align>\n\u2022
+    S\n\u2022 <b>Trick:</b> D\n\u2022 <b>Boost:</b> Shift\n\n<align=center><size=120%><b>MECHANICS</b></size></align>\n\u2022
     <b>Vault & Kong:</b> Hold S while moving toward an obstacle to automatically
     clear it.\n\u2022 <b>Tricks:</b> Tap D right before hitting an obstacle to perform
     a Trick Vault. Tricks are slower and far more dangerous, but they are the absolute
