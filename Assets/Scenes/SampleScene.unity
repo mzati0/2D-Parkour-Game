@@ -688,7 +688,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 96024679}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0.6614221, w: -0.75001395}
+  m_LocalRotation: {x: -0, y: -0, z: -0.022115588, w: -0.9997555}
   m_LocalPosition: {x: 0.3051332, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -823,7 +823,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 135135891}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: 0.098560795, w: 0.995131}
+  m_LocalRotation: {x: -0, y: -0, z: 0.092338316, w: 0.9957277}
   m_LocalPosition: {x: 0.4988092, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -13286,7 +13286,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1780514234}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0.5338388, w: 0.8455863}
+  m_LocalRotation: {x: -0, y: -0, z: -0.72514915, w: 0.6885919}
   m_LocalPosition: {x: 0.5032441, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -13424,6 +13424,7 @@ MonoBehaviour:
   isRagdolling: 0
   isScrambling: 0
   isWallSliding: 0
+  isFlushWall: 0
   moveAction: {fileID: -1680190386980627800, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}
   jumpAction: {fileID: -2099379676528639254, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}
   parkourAction: {fileID: -7471211009204490832, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}
@@ -13803,7 +13804,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1822250467}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0.15751724, w: 0.9875162}
+  m_LocalRotation: {x: -0, y: -0, z: -0.7399369, w: 0.6726763}
   m_LocalPosition: {x: 0.3209285, y: -0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0

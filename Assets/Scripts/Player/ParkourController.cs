@@ -26,6 +26,7 @@ namespace Player
         public bool isRagdolling;
         public bool isScrambling;
         public bool isWallSliding;
+        public bool isFlushWall;
         private bool hasScrambled; 
         private Collider2D currentLedge;
         private float stumbleTimer = 1f;
@@ -181,7 +182,10 @@ namespace Player
                 HandleUI(); 
                 return; 
             }
-
+            isFlushWall = (chestHit.collider && chestHit.distance <= wallContactThreshold) &&
+                          (waistHit.collider && waistHit.distance <= wallContactThreshold) &&
+                          (shinHit.collider && shinHit.distance <= wallContactThreshold) &&
+                          (toeHit.collider && toeHit.distance <= wallContactThreshold);
             CheckGrounded();
             ScanFrontObstacles(); 
             
@@ -222,11 +226,6 @@ namespace Player
                 return;
             }
             if (isStumbling || isSliding || isCrouching || isHanging) return;
-
-            bool isFlushWall = (chestHit.collider && chestHit.distance <= wallContactThreshold) &&
-                               (waistHit.collider && waistHit.distance <= wallContactThreshold) &&
-                               (shinHit.collider && shinHit.distance <= wallContactThreshold) &&
-                               (toeHit.collider && toeHit.distance <= wallContactThreshold);
 
             Vector2 moveInput = moveAction.action.ReadValue<Vector2>();
             bool holdingForward = Mathf.Abs(moveInput.x) > 0.1f && Mathf.Approximately(Mathf.Sign(moveInput.x), facingDirection);
@@ -1037,11 +1036,12 @@ namespace Player
             float inputX = moveAction.action.ReadValue<Vector2>().x;
             bool hasInput = Mathf.Abs(inputX) > 0.1f;
 
-            ghostAnimator.SetFloat("Direction", animationDirection); // Updated this line!
+            ghostAnimator.SetFloat("Direction", animationDirection); 
             ghostAnimator.SetBool("HasInput", hasInput); 
             ghostAnimator.SetBool("IsSliding", isSliding);
             ghostAnimator.SetBool("IsCrouching", isCrouching);
             ghostAnimator.SetBool("IsGrounded", isGrounded);
+            ghostAnimator.SetBool("IsFlushWall", isFlushWall);
 
             bool isBracing = false;
 
