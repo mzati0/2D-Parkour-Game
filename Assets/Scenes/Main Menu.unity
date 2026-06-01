@@ -894,20 +894,21 @@ MonoBehaviour:
   m_text: "<align=center><size=150%><b>HOW TO PLAY</b></size></align>\n\n<align=center><size=120%><b>CONTROLS</b></size></align>\n\u2022
     <b>Move:</b> Left/Right Arrow Keys\n\u2022 <b>Climb:</b> Up Arrow Key\n\u2022
     <b>Slide/Crouch:</b> Down Arrow Key\n\u2022 <b>Jump:</b> A\n\u2022 <b>Parkour:</b>
-    S\n\u2022 <b>Trick:</b> D\n\u2022 <b>Trick:</b> Shift\n\n\u2022 <b>Restart Level:</b>
-    R\n\n<align=center><size=120%><b>MECHANICS</b></size></align>\n\u2022 <b>Vault
-    & Kong:</b> Hold S while moving toward an obstacle to automatically clear it.\n\u2022
-    <b>Tricks:</b> Tap D right before hitting an obstacle to perform a Trick Vault.
-    Tricks are slower and far more dangerous, but they are the absolute easiest way
-    to build up your Flow Meter! Miss the timing, and you will wipe out. TIP: try
-    pressing the trick input earlier than you'd think\n\u2022 <b>Springboard:</b>
+    S\n\u2022 <b>Trick:</b> D\n\u2022 <b>Trick:</b> Shift\n\n<align=center><size=120%><b>MECHANICS</b></size></align>\n\u2022
+    <b>Vault & Kong:</b> Hold S while moving toward an obstacle to automatically
+    clear it.\n\u2022 <b>Tricks:</b> Tap D right before hitting an obstacle to perform
+    a Trick Vault. Tricks are slower and far more dangerous, but they are the absolute
+    easiest way to build up your Flow Meter! Miss the timing, and you will wipe out.
+    TIP: try pressing the trick input earlier than you'd think\n\u2022 <b>Springboard:</b>
     Jump <i>during</i> a vault (not a trick) to launch yourself up off the obstacle.\n\u2022
     <b>Wall Scramble:</b> Hold Forward + Up against a flat wall to run up it.\n\u2022
     <b>Ledge Grab:</b> Fall or scramble near a ledge to automatically hang.\n\n<align=center><size=120%><b>FLOW
     SYSTEM</b></size></align>\n\u2022 Keep moving fast and landing tricks to build
     your Flow Meter!\n\u2022 As your Flow Meter increases, your <b>base running speed
     and top speed</b> will get significantly faster.\n\u2022 <b>Flow Burst:</b> When
-    you have enough meter, press Shift for an instant burst of max speed."
+    you have enough meter, press Shift for an instant burst of max speed.\n\u2022
+    <b>LAST STAND:</b> When the laser is close, you will use your last bit of Flow
+    meter to slow the game down and focus, you also get a boost in speed."
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2100000, guid: e73a58f6e2794ae7b1b7e50b7fb811b0, type: 2}

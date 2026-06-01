@@ -56,11 +56,11 @@ namespace ActiveRagoll
                 playerRoot.position = activeRagdollRoot.position + standUpOffset;
             }
 
-            if (Keyboard.current != null)
-            {
-                if (Keyboard.current.rKey.wasPressedThisFrame && !_isRagdolling) TriggerRagdollDrop();
-                if (Keyboard.current.tKey.wasPressedThisFrame && _isRagdolling) TriggerRecovery();
-            }
+            // if (Keyboard.current != null)
+            // {
+            //     if (Keyboard.current.rKey.wasPressedThisFrame && !_isRagdolling) TriggerRagdollDrop();
+            //     if (Keyboard.current.tKey.wasPressedThisFrame && _isRagdolling) TriggerRecovery();
+            // }
         }
 
         public void TriggerRagdollDrop()

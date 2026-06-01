@@ -33,6 +33,7 @@ namespace Player
         public bool isWallSliding;
         public bool isFlushWall;
         public bool isVulnerable; 
+        public bool isLastStand;
         
         private bool hasScrambled; 
         private Collider2D currentLedge;
@@ -286,7 +287,7 @@ namespace Player
                 // Try to perform the trick every frame for 0.25 seconds
                 if (FireParkourAction(true))
                 {
-                    currentFlowMeter = Mathf.Clamp(currentFlowMeter + 10f, 0, maxFlowMeter);
+                    currentFlowMeter = Mathf.Clamp(currentFlowMeter + 20f, 0, maxFlowMeter);
                     yield break; // Success! Exit the coroutine.
                 }
                 
@@ -402,6 +403,13 @@ namespace Player
 
             topSpeed = Mathf.Lerp(minTopSpeed, maxTopSpeed, currentFlowRatio);
             accelerationRate = Mathf.Lerp(minAcceleration, maxAcceleration, currentFlowRatio);
+
+            // THE FIX: 1.5x Multiplier during Last Stand mode!
+            if (isLastStand)
+            {
+                topSpeed *= 1.5f;
+                accelerationRate *= 1.5f;
+            }
 
             if (currentAbsSpeed < flowDecaySpeedThreshold && isGrounded && !isVaulting && !isClimbing)
             {
@@ -529,7 +537,7 @@ namespace Player
             float targetY = trueTopY - 2f;
             transform.position = new Vector2(targetX, targetY);
             
-            DisplayAction("LEDGE GRAB!", Color.white);
+            //DisplayAction("LEDGE GRAB!", Color.white);
             ghostAnimator.SetTrigger("Ledge");
         }
 
@@ -704,7 +712,7 @@ namespace Player
         private void StartSlide()
         {
             isSliding = true;
-            DisplayAction("SLIDE!", slideColor);
+            //DisplayAction("SLIDE!", slideColor);
             ghostAnimator.SetTrigger("Slide");
             ApplyDownVisuals(slideColor);
         }
