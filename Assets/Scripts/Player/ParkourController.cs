@@ -84,6 +84,16 @@ namespace Player
         public float flowDecaySpeedThreshold = 5f;
         private float currentFlowRegenRate;
         #endregion
+        
+        [Header("Animation Curves")]
+        public AnimationCurve vaultArc = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
+        public AnimationCurve mantleArc = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
+        
+        [Header("Climb Customization")]
+        public AnimationCurve climbYCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f); 
+        public AnimationCurve climbXCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f); 
+        public float climbAnimationDuration = 1.1f;
+        
 
         #region 4. VARIABLES: Multi-Sensor Array
         [Header("Multi-Sensor Array")]
@@ -502,7 +512,7 @@ namespace Player
             transform.position = new Vector2(targetX, targetY);
             
             DisplayAction("LEDGE GRAB!", Color.white);
-            if (cubeSprite) cubeSprite.color = normalColor;
+            ghostAnimator.SetTrigger("Ledge");
         }
 
         private void HandleHangingState()
@@ -512,8 +522,9 @@ namespace Player
             if (inputY > 0.5f) 
             {
                 isHanging = false;
-                DisplayAction("MANTLE!", Color.white);
-                if (currentLedge) StartCoroutine(MantleRoutine(currentLedge));
+                DisplayAction("CLIMB!", Color.white);
+                if (currentLedge) StartCoroutine(ClimbRoutine(currentLedge));
+                ghostAnimator.SetTrigger("Climb");
             }
             else if (inputY < -0.5f) 
             {
@@ -819,7 +830,7 @@ namespace Player
             rb.linearVelocity = new Vector2(entrySpeedX, rb.linearVelocity.y);
             if (cubeSprite) cubeSprite.color = normalColor;
         }
-
+        
         private IEnumerator MantleRoutine(Collider2D obstacle)
         {
             isVaulting = true;
@@ -863,7 +874,44 @@ namespace Player
             rb.bodyType = RigidbodyType2D.Dynamic; 
             isVaulting = false;
         }
+        private IEnumerator ClimbRoutine(Collider2D obstacle)
+        {
+            isVaulting = true;
+            rb.bodyType = RigidbodyType2D.Kinematic;
+            rb.linearVelocity = Vector2.zero;
+            capsuleCollider2D.enabled = false;
 
+            Vector2 startPos = transform.position;
+            float edgeX = Mathf.Approximately(facingDirection, 1) ? obstacle.bounds.min.x + (playerWidth / 2f) : obstacle.bounds.max.x - (playerWidth / 2f);
+            float topY = obstacle.bounds.max.y; //+ (playerWidth / 2f);
+
+            float timePassed = 0f;
+
+            // ONE unified loop tied directly to your animation clip length
+            while (timePassed < climbAnimationDuration)
+            {
+                timePassed += Time.deltaTime;
+        
+                // Converts current time into a 0.0 to 1.0 percentage
+                float t = timePassed / climbAnimationDuration; 
+
+                // Evaluate both curves at this exact percentage
+                float curveY = climbYCurve.Evaluate(t);
+                float curveX = climbXCurve.Evaluate(t);
+
+                // Apply movement independently
+                float currentY = Mathf.Lerp(startPos.y, topY, curveY);
+                float currentX = Mathf.Lerp(startPos.x, edgeX, curveX);
+
+                rb.MovePosition(new Vector2(currentX, currentY));
+                yield return new WaitForFixedUpdate();
+            }
+
+            capsuleCollider2D.enabled = true;
+            rb.bodyType = RigidbodyType2D.Dynamic;
+            isVaulting = false;
+        }
+        
         private IEnumerator StumbleRoutine(Collider2D obstacle)
         {
             DisplayAction("STUMBLE!", stumbleColor);
@@ -1042,6 +1090,7 @@ namespace Player
             ghostAnimator.SetBool("IsCrouching", isCrouching);
             ghostAnimator.SetBool("IsGrounded", isGrounded);
             ghostAnimator.SetBool("IsFlushWall", isFlushWall);
+            ghostAnimator.SetBool("isHanging", isHanging);
 
             bool isBracing = false;
 
