@@ -264,6 +264,7 @@ namespace Player
             if (!isGrounded) return; 
 
             rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+            ghostAnimator.SetTrigger("Jump");
         }
 
         private void OnTrickTap(InputAction.CallbackContext context)
@@ -1106,10 +1107,79 @@ private bool CalculateParkourMatrix(bool isTricking)
 
         private void HandleAnimation()
         {
-            print(Mathf.Abs(rb.linearVelocity.x));
+            float currentAbsSpeed = Mathf.Abs(rb.linearVelocity.x);
+            float normalizedSpeed = 0f; // Default to 0 (Not moving)
+
+            if (currentAbsSpeed > 0.1f) 
+            {
+                if (currentAbsSpeed <= minTopSpeed)
+                {
+                    // Ramps smoothly from 0 up to 1 as you approach minTopSpeed
+                    normalizedSpeed = Mathf.InverseLerp(0f, minTopSpeed, currentAbsSpeed);
+                }
+                else
+                {
+                    // Ramps smoothly from 1 up to 2 as you approach maxTopSpeed
+                    normalizedSpeed = 1f + Mathf.InverseLerp(minTopSpeed, maxTopSpeed, currentAbsSpeed);
+                }
+            }
+
+            // Send it to the Animator
+            ghostAnimator.SetFloat("Speed", normalizedSpeed);
             
-            //maybe use min an max for this part
-            ghostAnimator.SetFloat("Speed", Mathf.Abs(rb.linearVelocity.x));
+            // 1. Read the actual player input (Intent)
+            float inputX = moveAction.action.ReadValue<Vector2>().x;
+            bool hasInput = Mathf.Abs(inputX) > 0.1f;
+
+            // // 2. Read the actual physical movement (Momentum)
+            // // Using a slightly higher threshold (0.5f) so they don't play a heavy brake animation for micro-movements
+            // bool hasMomentum = Mathf.Abs(rb.linearVelocity.x) > 0.5f; 
+            //
+            // // 3. Determine the Braking state
+            // // Braking happens when you let go of the stick (!hasInput), but you are still sliding forward (hasMomentum), and you are on the floor.
+            // bool isBraking = !hasInput && hasMomentum && isGrounded;
+
+            // --- SEND DATA TO ANIMATOR ---
+    
+            // Continuous Floats
+            ghostAnimator.SetFloat("Direction", facingDirection);
+    
+            // Core Movement Bools (Replaced the generic 'isMoving')
+            ghostAnimator.SetBool("HasInput", hasInput); 
+
+            // Contextual States
+            // ghostAnimator.SetBool("IsGrounded", isGrounded);
+            // ghostAnimator.SetBool("IsSliding", isSliding);
+            // ghostAnimator.SetBool("IsCrouching", isCrouching);
+            // ghostAnimator.SetBool("IsWallSliding", isWallSliding);
+            
+            // 1. Send Vertical Velocity to Animator
+            // (Used to transition from Rise to Fall when it drops below 0)
+          //  ghostAnimator.SetFloat("VelocityY", rb.linearVelocity.y);
+            ghostAnimator.SetBool("IsGrounded", isGrounded);
+
+            // 2. The Predictive Brace Logic
+            bool isBracing = false;
+
+            // Only check for the floor if we are actively falling
+            if (!isGrounded && rb.linearVelocity.y < -0.1f) 
+            {
+                float t = 0.417f; // Your animation duration
+                float v = Mathf.Abs(rb.linearVelocity.y);
+                float a = Mathf.Abs(Physics2D.gravity.y * rb.gravityScale);
+
+                // The true distance you will fall in 0.417 seconds, accounting for gravity
+                float predictDistance = (v * t) + (0.5f * a * (t * t));   
+                // Cast a ray from the feet to that exact predicted distance
+                RaycastHit2D braceHit = Physics2D.Raycast(footPosition.position, Vector2.down, predictDistance, groundLayer);
+        
+                if (braceHit.collider)
+                {
+                    isBracing = true; // The floor is approaching fast! Extend the legs!
+                }
+            }
+    
+            ghostAnimator.SetBool("IsBracing", isBracing);
         }
 
         private void ApplyDownVisuals(Color stateColor)
