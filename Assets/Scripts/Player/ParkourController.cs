@@ -9,27 +9,14 @@ namespace Player
 {
     public class ParkourController : MonoBehaviour
     {
-        #region VARIABLES: Core & Components
+        #region 1. VARIABLES: Core Components & State
         [Header("Core Components")]
         public Rigidbody2D rb;
         public SpriteRenderer cubeSprite;
         private CapsuleCollider2D _capsuleCollider2D;
         [SerializeField] private GameObject sprites;
-        
-        [Header("Animation")]
         public Animator ghostAnimator;
-        #endregion
 
-        #region VARIABLES: Input Actions
-        [Header("Input Actions")]
-        public InputActionReference moveAction;
-        public InputActionReference jumpAction;
-        public InputActionReference parkourAction;
-        public InputActionReference trickAction;
-        public InputActionReference flowAction;
-        #endregion
-
-        #region VARIABLES: State Flags & Visuals
         [Header("State Flags")]
         public bool isVaulting;
         public bool isGrounded;
@@ -38,56 +25,59 @@ namespace Player
         public bool isCrouching;
         public bool isHanging;
         public bool isRagdolling;
-        private Collider2D _currentLedge;
         public bool isScrambling;
-        private bool _hasScrambled; // NEW: Prevents infinite scaling
         public bool isWallSliding;
-        public bool isWallJumping;
-
-        [Header("State Colors")]
-        public Color normalColor = Color.blue;
-        public Color stumbleColor = Color.red;
-        public Color slideColor = Color.yellow; 
-        public Color crouchColor = new(1f, 0.5f, 0f); 
-    
+        private bool _hasScrambled; 
+        private Collider2D _currentLedge;
         private float _stumbleTimer = 1f;
-        private float _lockedFacingDirection = 1f;
         #endregion
 
-        #region VARIABLES: Physics & Movement
+        #region 2. VARIABLES: Physics & Movement
+        [Header("Input Actions")]
+        public InputActionReference moveAction;
+        public InputActionReference jumpAction;
+        public InputActionReference parkourAction;
+        public InputActionReference trickAction;
+        public InputActionReference flowAction;
+
         [Header("Movement Mechanics")]
-        public float topSpeed = 12f;
         public float accelerationRate = 12f; 
         public float decelerationRate = 15f; 
         public float turnaroundMultiplier = 3f; 
         public float crouchSpeedMultiplier = 0.5f; 
         public float slideDecelerationRate = 6f; 
         public float jumpForce = 20f;
-        public float airControlMultiplier = 0.5f; // Half acceleration in the air
+        public float airControlMultiplier = 0.5f; 
         public float springboardForce = 25f;
+
         [Header("Wall Movement")]
         public float wallScrambleSpeed = 12f;
         public float wallScrambleDuration = 0.35f;
         public float wallSlideSpeed = 4f;
-        public float wallJumpForceX = 10f;
-        public float wallJumpForceY = 18f;
     
         [Header("Spatial Data")]
-        public float facingDirection = 1f;
+        [Tooltip("Locked to 1f so raycasts do not flip when walking backwards.")]
+        public float facingDirection = 1f; 
+        private float _lockedFacingDirection = 1f;
+        private float _animationDirection = 1f;
         public float playerWidth = 1f;
         #endregion
 
-        #region VARIABLES: Flow System
+        #region 3. VARIABLES: Flow System
         [Header("Flow System")]
         public float maxFlowMeter = 100f;
         public float currentFlowMeter = 100f; 
         public float burstSpeedBonus = 8f; 
         public float burstCost = 30f;
         public float maxBurstActivationSpeed = 8f; 
+        
+        [Tooltip("Current active top speed, dynamically scaled by Flow.")]
+        public float topSpeed = 12f;
         public float minTopSpeed = 36f; 
         public float maxTopSpeed = 45f; 
         public float minAcceleration = 8f;
         public float maxAcceleration = 14f;
+        
         public float minFlowRegen = 1f; 
         public float maxFlowRegen = 5f; 
         public float flowDecayRate = 50f; 
@@ -95,7 +85,7 @@ namespace Player
         private float _currentFlowRegenRate;
         #endregion
 
-        #region VARIABLES: Multi-Sensor Array (NEW)
+        #region 4. VARIABLES: Multi-Sensor Array
         [Header("Multi-Sensor Array")]
         public Transform headPosition; 
         public Transform chestPosition;
@@ -110,7 +100,7 @@ namespace Player
         public Vector2 shinBoxSize = new(0.2f, 0.3f);
         public Vector2 toeBoxSize = new(0.2f, 0.1f);
         public float sensorCastDistance = 2f;
-        public float wallContactThreshold = 1f; // How close the wall must be to physically touch it
+        public float wallContactThreshold = 1f; 
         public float groundCheckDistance = 0.2f;
         
         public LayerMask obstacleLayer;
@@ -125,7 +115,13 @@ namespace Player
         private RaycastHit2D _toeHit;
         #endregion
     
-        #region VARIABLES: UI & Feedback
+        #region 5. VARIABLES: UI & Visuals
+        [Header("State Colors")]
+        public Color normalColor = Color.blue;
+        public Color stumbleColor = Color.red;
+        public Color slideColor = Color.yellow; 
+        public Color crouchColor = new(1f, 0.5f, 0f); 
+
         [Header("UI & Feedback")]
         public TextMeshProUGUI actionText;
         public TextMeshProUGUI speedKmhText;
@@ -137,19 +133,19 @@ namespace Player
         public Image flowMeterFill;
         public float uiLerpSpeed = 10f; 
         private Coroutine _currentTextCoroutine;
-        #endregion
 
-        #region  VARIABLES: Debug
         [Header("Debug")]
         [SerializeField] private bool showUnits;
         #endregion
 
-        #region 1. UNITY LIFECYCLE
+        #region UNITY LIFECYCLE
         private void Start()
         {
             _capsuleCollider2D = GetComponent<CapsuleCollider2D>();
             if (cubeSprite == null) cubeSprite = GetComponent<SpriteRenderer>(); 
             if (cubeSprite) cubeSprite.color = normalColor;
+            
+            facingDirection = 1f; // Hard-lock facing direction on startup
         }
 
         private void OnEnable()
@@ -182,13 +178,11 @@ namespace Player
         {
             if (isRagdolling)
             {
-                // Kill any phantom momentum trying to build up in the background
                 rb.linearVelocity = Vector2.zero; 
-        
-                // Keep updating the UI, but skip all movement and raycasting
                 HandleUI(); 
                 return; 
             }
+
             CheckGrounded();
             ScanFrontObstacles(); 
             
@@ -197,10 +191,9 @@ namespace Player
             if (isHanging)
             {
                 HandleHangingState();
-                return; // Skips all movement and gravity logic while on the wall
+                return; 
             }
 
-            // Airborne Wall Interactions
             CheckWallScramble();
             HandleWallSlide();
             CheckAirborneLedgeGrab();
@@ -215,12 +208,13 @@ namespace Player
             HandleMovement();
             HandleCrouchAndSlide();
             HandleParkourHold();
+            HandlePassiveStumble();
             HandleAnimation();
             HandleUI(); 
         }
         #endregion
 
-        #region 2. INPUT HANDLERS
+        #region INPUT HANDLERS
         private void OnJump(InputAction.CallbackContext context)
         {
             if (isVaulting) 
@@ -230,7 +224,6 @@ namespace Player
             }
             if (isStumbling || isSliding || isCrouching || isHanging) return;
 
-            // Must be a flush, flat wall to jump or standstill scramble
             bool isFlushWall = (_chestHit.collider && _chestHit.distance <= wallContactThreshold) &&
                                (_waistHit.collider && _waistHit.distance <= wallContactThreshold) &&
                                (_shinHit.collider && _shinHit.distance <= wallContactThreshold) &&
@@ -240,7 +233,6 @@ namespace Player
             bool holdingForward = Mathf.Abs(moveInput.x) > 0.1f && Mathf.Approximately(Mathf.Sign(moveInput.x), facingDirection);
             bool holdingUp = moveInput.y > 0.5f;
 
-            // 1. STANDSTILL SCRAMBLE (Requires flush wall)
             if (isGrounded && isFlushWall && holdingForward && holdingUp)
             {
                 _hasScrambled = true; 
@@ -248,14 +240,6 @@ namespace Player
                 return;
             }
 
-            // 2. STRICT WALL JUMP (Requires flush wall)
-            if (isScrambling || isWallSliding || (!isGrounded && isFlushWall))
-            {
-                PerformWallJump();
-                return;
-            }
-
-            // 3. AIRBORNE / GROUNDED PARKOUR & JUMP
             if (Mathf.Abs(moveInput.x) > 0.1f)
             {
                 if (FireParkourAction(false)) return; 
@@ -295,15 +279,10 @@ namespace Player
         }
         #endregion
 
-        #region 3. CORE UPDATE LOGIC
-private void HandleMovement()
+        #region CORE MOVEMENT
+        private void HandleMovement()
         {
-            // Removed !isGrounded from this early return
             if (isVaulting || isHanging || isScrambling || isWallSliding) return; 
-
-            // If we wall jumped, lock horizontal steering completely until we land or grab something.
-            // Gravity still affects Y, but X remains locked to the Wall Jump force.
-            if (isWallJumping) return;
 
             if (isSliding)
             {
@@ -314,22 +293,25 @@ private void HandleMovement()
 
             Vector2 moveVector = moveAction.action.ReadValue<Vector2>();
             float targetSpeed = 0f;
+            float currentVelocityX = rb.linearVelocity.x;
 
             if (Mathf.Abs(moveVector.x) > 0.1f) 
             {
-                float cleanDirection = Mathf.Sign(moveVector.x); 
-                targetSpeed = cleanDirection * (isCrouching ? topSpeed * crouchSpeedMultiplier : topSpeed);
-                facingDirection = cleanDirection;
-            }
-
-            float currentVelocityX = rb.linearVelocity.x;
-        
-            if (Mathf.Abs(moveVector.x) > 0.1f)
-            {
+                float inputDirection = Mathf.Sign(moveVector.x); 
+                _animationDirection = inputDirection; // Send input intention to the animator
+                
+                bool isMovingBackward = inputDirection != facingDirection;
+                
+                // Halve the active top speed if moving backwards
+                float activeSpeedLimit = isMovingBackward ? (topSpeed * 0.5f) : topSpeed;
+                
+                targetSpeed = inputDirection * (isCrouching ? activeSpeedLimit * crouchSpeedMultiplier : activeSpeedLimit);
+                
                 float accelToUse = accelerationRate;
-                if (!isGrounded) accelToUse *= airControlMultiplier; // 50% acceleration in air
+                if (!isGrounded) accelToUse *= airControlMultiplier; 
 
-                if (!Mathf.Approximately(Mathf.Sign(moveVector.x), Mathf.Sign(currentVelocityX)) && Mathf.Abs(currentVelocityX) > 0.5f)
+                // Turnaround penalty
+                if (!Mathf.Approximately(inputDirection, Mathf.Sign(currentVelocityX)) && Mathf.Abs(currentVelocityX) > 0.5f)
                 {
                     accelToUse *= turnaroundMultiplier; 
                 }
@@ -338,8 +320,6 @@ private void HandleMovement()
             }
             else
             {
-                // If you let go of the stick midair, you shouldn't magically hit the brakes.
-                // We only apply deceleration if you are on the ground.
                 float decelToUse = isGrounded ? decelerationRate : 0f; 
                 currentVelocityX = Mathf.MoveTowards(currentVelocityX, 0f, decelToUse * Time.deltaTime);
             }
@@ -367,20 +347,69 @@ private void HandleMovement()
                     TransitionToCrouch();
                 }
             }
-            else
+            else if (isSliding || isCrouching)
             {
-                if (isSliding || isCrouching)
-                {
-                    RaycastHit2D ceilingCheck = Physics2D.Raycast(footPosition.position, Vector2.up, 1.9f, obstacleLayer);
-                    if (!ceilingCheck.collider) StandUp(); 
-                }
+                RaycastHit2D ceilingCheck = Physics2D.Raycast(footPosition.position, Vector2.up, 1.9f, obstacleLayer);
+                if (!ceilingCheck.collider) StandUp(); 
             }
         }
+        
+        private void HandleFlowEconomy()
+        {
+            float currentAbsSpeed = Mathf.Abs(rb.linearVelocity.x);
+            float currentFlowRatio = currentFlowMeter / maxFlowMeter;
+
+            topSpeed = Mathf.Lerp(minTopSpeed, maxTopSpeed, currentFlowRatio);
+            accelerationRate = Mathf.Lerp(minAcceleration, maxAcceleration, currentFlowRatio);
+
+            if (currentAbsSpeed < flowDecaySpeedThreshold && isGrounded && !isVaulting)
+            {
+                _currentFlowRegenRate = -flowDecayRate;
+                currentFlowMeter += _currentFlowRegenRate * Time.deltaTime;
+            }
+            else if (currentAbsSpeed >= flowDecaySpeedThreshold)
+            {
+                float speedRatio = Mathf.InverseLerp(minTopSpeed, maxTopSpeed, currentAbsSpeed);
+                _currentFlowRegenRate = Mathf.Lerp(minFlowRegen, maxFlowRegen, speedRatio);
+                currentFlowMeter += _currentFlowRegenRate * Time.deltaTime;
+            }
+            else 
+            {
+                _currentFlowRegenRate = 0f;
+            }
+
+            currentFlowMeter = Mathf.Clamp(currentFlowMeter, 0f, maxFlowMeter);
+        }
+        #endregion
+
+        #region PARKOUR & SENSORS
+        private void CheckGrounded()
+        {
+           RaycastHit2D hit = Physics2D.Raycast(footPosition.position, Vector2.down, groundCheckDistance, groundLayer);
+           isGrounded = hit.collider;
+
+           if (isGrounded) _hasScrambled = false; 
+        }
+
+        private void ScanFrontObstacles()
+        {
+            if (!headPosition || !chestPosition || !waistPosition || !shinPosition || !footPosition) return;
+
+            Vector2 fireDirection = new Vector2(facingDirection, 0f);
+
+            _headHit = Physics2D.BoxCast(headPosition.position, headBoxSize, 0f, fireDirection, sensorCastDistance, obstacleLayer);
+            _chestHit = Physics2D.BoxCast(chestPosition.position, chestBoxSize, 0f, fireDirection, sensorCastDistance, obstacleLayer);
+            _waistHit = Physics2D.BoxCast(waistPosition.position, waistBoxSize, 0f, fireDirection, sensorCastDistance, obstacleLayer);
+            _shinHit = Physics2D.BoxCast(shinPosition.position, shinBoxSize, 0f, fireDirection, sensorCastDistance, obstacleLayer);
+            _toeHit = Physics2D.BoxCast(footPosition.position, toeBoxSize, 0f, fireDirection, sensorCastDistance, obstacleLayer);
+
+            _isCollidingFront = _headHit.collider || _chestHit.collider || _waistHit.collider || _shinHit.collider || _toeHit.collider;
+        }
+
         private void CheckWallScramble()
         {
             if (isGrounded || isScrambling || isVaulting || isHanging || _hasScrambled) return;
 
-            // Mirror's Edge Rule: Must be a flush, solid wall. All lower body sensors must hit.
             bool isFlushWall = (_chestHit.collider && _chestHit.distance <= wallContactThreshold) &&
                                (_waistHit.collider && _waistHit.distance <= wallContactThreshold) &&
                                (_shinHit.collider && _shinHit.distance <= wallContactThreshold) &&
@@ -423,206 +452,16 @@ private void HandleMovement()
                 isWallSliding = false;
             }
         }
-        private void PerformWallJump()
-        {
-            isScrambling = false;
-            isWallSliding = false;
-            isWallJumping = true; 
-            _hasScrambled = false; // Give the scramble back for the NEXT wall
 
-            // Push away from the wall and up
-            float jumpOutDirection = -facingDirection; 
-            rb.linearVelocity = new Vector2(jumpOutDirection * wallJumpForceX, wallJumpForceY);
-            
-            facingDirection = jumpOutDirection; // Turn the character around
-            DisplayAction("WALL JUMP!", Color.white);
-        }
-
-        private void HandleFlowEconomy()
-        {
-            float currentAbsSpeed = Mathf.Abs(rb.linearVelocity.x);
-            float currentFlowRatio = currentFlowMeter / maxFlowMeter;
-
-            topSpeed = Mathf.Lerp(minTopSpeed, maxTopSpeed, currentFlowRatio);
-            accelerationRate = Mathf.Lerp(minAcceleration, maxAcceleration, currentFlowRatio);
-
-            if (currentAbsSpeed < flowDecaySpeedThreshold && isGrounded && !isVaulting)
-            {
-                _currentFlowRegenRate = -flowDecayRate;
-                currentFlowMeter += _currentFlowRegenRate * Time.deltaTime;
-            }
-            else if (currentAbsSpeed >= flowDecaySpeedThreshold)
-            {
-                float speedRatio = Mathf.InverseLerp(minTopSpeed, maxTopSpeed, currentAbsSpeed);
-                _currentFlowRegenRate = Mathf.Lerp(minFlowRegen, maxFlowRegen, speedRatio);
-                currentFlowMeter += _currentFlowRegenRate * Time.deltaTime;
-            }
-            else 
-            {
-                _currentFlowRegenRate = 0f;
-            }
-
-            currentFlowMeter = Mathf.Clamp(currentFlowMeter, 0f, maxFlowMeter);
-        }
-
-        private void HandleStumbleDeceleration()
-        {
-            _stumbleTimer -= Time.deltaTime;
-        
-            float speedMultiplier = Mathf.Clamp01(_stumbleTimer / 3f); 
-            rb.linearVelocity = new Vector2(_lockedFacingDirection * topSpeed * speedMultiplier, rb.linearVelocity.y);
-
-            if (_stumbleTimer <= 0f)
-            {
-                isStumbling = false;
-                if (cubeSprite) cubeSprite.color = normalColor;
-                DisplayAction("RECOVERED", Color.white);
-            }
-        }
-
-        private void HandlePassiveStumble()
-        {
-            if (isVaulting || !isGrounded || isStumbling || parkourAction.action.IsPressed()) return;
-
-            if (_toeHit.collider && !_waistHit.collider)
-            {
-                // NEW: How deep is the object we tripped on?
-                float trueTopY;
-                float obstacleDepth = CalculateObstacleDepth(_toeHit, out trueTopY);
-
-                // If it's deeper than 1.5 units, it's a massive floor. Do not vault it.
-                bool isVaultableSize = obstacleDepth < 1.5f;
-                float armorCost = 50f; 
-
-                if (isVaultableSize && currentFlowMeter >= armorCost)
-                {
-                    currentFlowMeter -= armorCost;
-                    DisplayAction("STUMBLE PROTECTED!", Color.cyan);
-                    if (cubeSprite) cubeSprite.color = Color.cyan;
-                    StartCoroutine(VaultRoutine(_toeHit.collider, 0.2f, 0.1f)); 
-                }
-                else
-                {
-                    // No armor, OR the object is too massively deep to vault. Trip normally.
-                    StartCoroutine(StumbleRoutine(_toeHit.collider));
-                }
-            }
-        }
-
-        private void HandleParkourHold()
-        {
-            if (isVaulting || !isGrounded || isStumbling) return; 
-            if (parkourAction.action.IsPressed()) FireParkourAction(false);
-        }
-        #endregion
-
-       #region 4. MULTI-SENSOR SYSTEM & LOGIC (NEW)
-        private void OnCollisionEnter2D(Collision2D collision)
-        {
-            if (isVaulting || !isGrounded || isStumbling || parkourAction.action.IsPressed() || isHanging || isScrambling) return;
-
-            if (((1 << collision.gameObject.layer) & obstacleLayer) != 0)
-            {
-                ContactPoint2D contact = collision.GetContact(0);
-                
-                // Only trigger if we hit the flat SIDE of an object
-                if (Mathf.Abs(contact.normal.x) > 0.5f)
-                {
-                    // 1. THE SENSOR HEIGHT MAP (Zero bounds used)
-                    // If Waist, Chest, or Head is blocked -> It's a solid wall. 
-                    // Do absolutely nothing. Physics will stop the player dead.
-                    if (_waistHit.collider || _chestHit.collider || _headHit.collider) return;
-
-                    bool isShinHigh = _shinHit.collider; 
-                    bool isToeHigh = _toeHit.collider && !_shinHit.collider;
-
-                    if (!isShinHigh && !isToeHigh) return; // Failsafe
-
-                    // 2. SPEED CONVERSIONS
-                    float currentSpeed = Mathf.Abs(rb.linearVelocity.x);
-                    float speed10 = 3.33f; // 10 km/h
-                    float speed24 = 8.0f;  // 24 km/h
-                    float speed36 = 12.0f; // 36 km/h
-
-                    int severity = 0; // 0=None, 1=Yellow, 2=Orange, 3=Red
-
-                    // 3. THE EXACT SEVERITY MATRIX
-                    if (isShinHigh)
-                    {
-                        if (currentSpeed < speed10) severity = 1;
-                        else if (currentSpeed < speed24) severity = 2;
-                        else severity = 3;
-                    }
-                    else if (isToeHigh)
-                    {
-                        if (currentSpeed < speed10) severity = 0;
-                        else if (currentSpeed < speed24) severity = 1;
-                        else if (currentSpeed < speed36) severity = 2;
-                        else severity = 3;
-                    }
-
-                    // Low speed toe-hit: Do nothing at all.
-                    if (severity == 0) return;
-
-                    // 4. THE ARMOR CHECK
-                    // Armor only triggers on severity 1 or 2. 
-                    // If it's a RED crash (severity 3) at Mach 10, armor fails. You eat the crash.
-                    if (severity < 3 && currentFlowMeter >= 50f)
-                    {
-                        currentFlowMeter -= 50f;
-                        DisplayAction("STUMBLE PROTECTED!", Color.cyan);
-                        if (cubeSprite) cubeSprite.color = Color.cyan;
-                        
-                        // Pass the collider just to get the reference, we'll fix VaultRoutine's bounds next if needed
-                        StartCoroutine(VaultRoutine(collision.collider, 0.2f, 0.15f));
-                        return;
-                    }
-
-                    // 5. UNARMORED / RED CRASH
-                    StartCoroutine(DynamicStumbleRoutine(collision.collider, severity));
-                }
-            }
-        }
-       private void CheckGrounded()
-       {
-           RaycastHit2D hit = Physics2D.Raycast(footPosition.position, Vector2.down, groundCheckDistance, groundLayer);
-           isGrounded = hit.collider;
-
-           if (isGrounded)
-           {
-               _hasScrambled = false; 
-               isWallJumping = false; 
-           }
-       }
-
-        private void ScanFrontObstacles()
-        {
-            if (!headPosition || !chestPosition || !waistPosition || !shinPosition || !footPosition) return;
-
-            Vector2 fireDirection = new Vector2(facingDirection, 0f);
-
-            _headHit = Physics2D.BoxCast(headPosition.position, headBoxSize, 0f, fireDirection, sensorCastDistance, obstacleLayer);
-            _chestHit = Physics2D.BoxCast(chestPosition.position, chestBoxSize, 0f, fireDirection, sensorCastDistance, obstacleLayer);
-            _waistHit = Physics2D.BoxCast(waistPosition.position, waistBoxSize, 0f, fireDirection, sensorCastDistance, obstacleLayer);
-            _shinHit = Physics2D.BoxCast(shinPosition.position, shinBoxSize, 0f, fireDirection, sensorCastDistance, obstacleLayer);
-            _toeHit = Physics2D.BoxCast(footPosition.position, toeBoxSize, 0f, fireDirection, sensorCastDistance, obstacleLayer);
-
-            _isCollidingFront = _headHit.collider || _chestHit.collider || _waistHit.collider || _shinHit.collider || _toeHit.collider;
-        }
-        
         private void CheckAirborneLedgeGrab()
         {
-            // Only check if falling or at the absolute apex
             if (isGrounded || isVaulting || isScrambling || rb.linearVelocity.y > 0.1f) return; 
 
-            // Wide net for neutral jumps to prevent missing
             float ledgeCatchRadius = wallContactThreshold + 0.2f; 
-
             bool chestHit = _chestHit.collider && _chestHit.distance <= ledgeCatchRadius;
             bool waistHit = _waistHit.collider && _waistHit.distance <= ledgeCatchRadius;
             bool headClear = !_headHit.collider || _headHit.distance > ledgeCatchRadius;
 
-            // THE LEDGE INTERCEPT: Chest/Waist hits, Head is clear
             if ((chestHit || waistHit) && headClear)
             {
                 Collider2D wallCollider = chestHit ? _chestHit.collider : _waistHit.collider;
@@ -637,7 +476,6 @@ private void HandleMovement()
                     bool holdingForward = Mathf.Abs(moveInput.x) > 0.1f && Mathf.Approximately(Mathf.Sign(moveInput.x), facingDirection);
                     bool holdingUp = moveInput.y > 0.5f;
 
-                    // PRIORITIZE CLIMBING: If pushing in, force the mantle immediately.
                     if (holdingForward || holdingUp)
                     {
                         DisplayAction("AUTO MANTLE!", Color.cyan);
@@ -645,7 +483,6 @@ private void HandleMovement()
                     }
                     else
                     {
-                        // NEUTRAL: The instant teleport snap that actually works.
                         SnapToLedge(hitPoint, downHit.point.y, wallCollider);
                     }
                 }
@@ -656,19 +493,14 @@ private void HandleMovement()
         {
             isHanging = true;
             _currentLedge = ledgeCollider;
-            
-            // Freeze physics
             rb.bodyType = RigidbodyType2D.Kinematic;
             rb.linearVelocity = Vector2.zero;
 
-            // Calculate snap coordinates
             float targetX = Mathf.Approximately(facingDirection, 1f) 
                 ? wallHitPoint.x - (playerWidth / 2f) 
                 : wallHitPoint.x + (playerWidth / 2f);
             
-            // Align the top of the head exactly to the ledge
             float targetY = trueTopY - 2f;
-
             transform.position = new Vector2(targetX, targetY);
             
             DisplayAction("LEDGE GRAB!", Color.white);
@@ -679,13 +511,13 @@ private void HandleMovement()
         {
             float inputY = moveAction.action.ReadValue<Vector2>().y;
 
-            if (inputY > 0.5f) // Press UP to Mantle
+            if (inputY > 0.5f) 
             {
                 isHanging = false;
                 DisplayAction("MANTLE!", Color.white);
                 if (_currentLedge) StartCoroutine(MantleRoutine(_currentLedge));
             }
-            else if (inputY < -0.5f) // Press DOWN to Drop
+            else if (inputY < -0.5f) 
             {
                 isHanging = false;
                 rb.bodyType = RigidbodyType2D.Dynamic;
@@ -700,11 +532,8 @@ private void HandleMovement()
             return CalculateParkourMatrix(isTricking); 
         }
 
-private bool CalculateParkourMatrix(bool isTricking)
+        private bool CalculateParkourMatrix(bool isTricking)
         {
-            float inputY = moveAction.action.ReadValue<Vector2>().y;
-
-            // 2. VAULTABLE / TABLE: Waist hits, Chest is clear.
             if (_waistHit.collider && !_chestHit.collider)
             {
                 float trueTopY;
@@ -728,87 +557,124 @@ private bool CalculateParkourMatrix(bool isTricking)
                     DisplayAction("Mantle!", Color.white);
                     StartCoroutine(MantleRoutine(_waistHit.collider));
                 }
-                return true; // Move executed, consume the jump!
+                return true; 
             }
 
-            // 3. LOW OBSTACLE: Shin or Toe hits, Waist is clear.
             if ((_shinHit.collider || _toeHit.collider) && !_waistHit.collider)
             {
                 float duration = isTricking ? 0.4f : 0.2f;
                 DisplayAction(isTricking ? "TRICK HOP!" : "SPEED STEP!", isTricking ? Color.cyan : Color.white);
                 StartCoroutine(VaultRoutine(_shinHit.collider ? _shinHit.collider : _toeHit.collider, duration, 0.1f));
-                return true; // Move executed, consume the jump!
+                return true; 
             }
 
-            return false; // No valid vault found. DO NOT consume the jump!
+            return false; 
         }
+
         private float CalculateObstacleDepth(RaycastHit2D forwardHit, out float trueTopY)
         {
             float maxSearchDistance = 4f; 
-            float maxClimbHeight = 2.5f; // Maximum Y distance we are willing to scan upwards
+            float maxClimbHeight = 2.5f; 
             float scanStep = 0.1f;
             
             trueTopY = forwardHit.point.y; 
             bool foundTop = false;
 
-            // --- 1. THE VERTICAL SCAN (Find the lip) ---
-            // Start slightly pulled back from the wall so our forward casts don't spawn inside it
             Vector2 verticalScanOrigin = new Vector2(forwardHit.point.x - (facingDirection * 0.05f), forwardHit.point.y);
 
             for (float yOffset = scanStep; yOffset <= maxClimbHeight; yOffset += scanStep)
             {
                 Vector2 stepOrigin = new Vector2(verticalScanOrigin.x, verticalScanOrigin.y + yOffset);
-                
-                // Cast forward a tiny bit to see if the wall is still there
                 RaycastHit2D hit = Physics2D.Raycast(stepOrigin, new Vector2(facingDirection, 0f), 0.2f, obstacleLayer);
 
                 if (!hit.collider)
                 {
-                    // The ray missed! We found the top edge.
-                    // We set trueTopY slightly below the miss-line to ensure our downward casts hit the surface.
                     trueTopY = stepOrigin.y - (scanStep / 2f); 
                     foundTop = true;
                     break;
                 }
             }
 
-            if (!foundTop)
-            {
-                // The wall goes up infinitely (or higher than maxClimbHeight). 
-                // Return massive depth so the system treats it as an unclimbable wall.
-                return maxSearchDistance + 1f; 
-            }
+            if (!foundTop) return maxSearchDistance + 1f; 
 
-            // --- 2. THE HORIZONTAL SCAN (Find the depth) ---
             float depthStep = 0.25f;
             float startX = forwardHit.point.x + (facingDirection * 0.1f);
 
             for (float depth = 0f; depth <= maxSearchDistance; depth += depthStep)
             {
-                // Position probe slightly above our newly found trueTopY
                 Vector2 rayOrigin = new Vector2(startX + (facingDirection * depth), trueTopY + 0.2f);
-                
-                // Cast straight down
                 RaycastHit2D downHit = Physics2D.Raycast(rayOrigin, Vector2.down, 0.5f, obstacleLayer);
 
-                // If we hit nothing, or the floor drops out, we found the back edge
-                if (!downHit.collider || downHit.point.y < trueTopY - 0.2f)
-                {
-                    return depth; 
-                }
+                if (!downHit.collider || downHit.point.y < trueTopY - 0.2f) return depth; 
             }
             
-            return maxSearchDistance; // Massive platform (Mantle)
+            return maxSearchDistance; 
         }
 
+        private void OnCollisionEnter2D(Collision2D collision)
+        {
+            if (isVaulting || !isGrounded || isStumbling || parkourAction.action.IsPressed() || isHanging || isScrambling) return;
+
+            if (((1 << collision.gameObject.layer) & obstacleLayer) != 0)
+            {
+                ContactPoint2D contact = collision.GetContact(0);
+                
+                if (Mathf.Abs(contact.normal.x) > 0.5f)
+                {
+                    if (_waistHit.collider || _chestHit.collider || _headHit.collider) return;
+
+                    bool isShinHigh = _shinHit.collider; 
+                    bool isToeHigh = _toeHit.collider && !_shinHit.collider;
+
+                    if (!isShinHigh && !isToeHigh) return; 
+
+                    float currentSpeed = Mathf.Abs(rb.linearVelocity.x);
+                    float speed10 = 3.33f; 
+                    float speed24 = 8.0f;  
+                    float speed36 = 12.0f; 
+
+                    int severity = 0; 
+
+                    if (isShinHigh)
+                    {
+                        if (currentSpeed < speed10) severity = 1;
+                        else if (currentSpeed < speed24) severity = 2;
+                        else severity = 3;
+                    }
+                    else if (isToeHigh)
+                    {
+                        if (currentSpeed < speed10) severity = 0;
+                        else if (currentSpeed < speed24) severity = 1;
+                        else if (currentSpeed < speed36) severity = 2;
+                        else severity = 3;
+                    }
+
+                    if (severity == 0) return;
+
+                    if (severity < 3 && currentFlowMeter >= 50f)
+                    {
+                        currentFlowMeter -= 50f;
+                        DisplayAction("STUMBLE PROTECTED!", Color.cyan);
+                        if (cubeSprite) cubeSprite.color = Color.cyan;
+                        
+                        StartCoroutine(VaultRoutine(collision.collider, 0.2f, 0.15f));
+                        return;
+                    }
+
+                    StartCoroutine(DynamicStumbleRoutine(collision.collider, severity));
+                }
+            }
+        }
+        #endregion
+
+        #region ACTION STATES
         private void Springboard()
         {
-            StopAllCoroutines(); // Aborts the VaultRoutine mid-air
+            StopAllCoroutines(); 
             isVaulting = false;
             _capsuleCollider2D.enabled = true;
             rb.bodyType = RigidbodyType2D.Dynamic;
 
-            // Maintain forward momentum but add massive upward force
             rb.linearVelocity = new Vector2(facingDirection * topSpeed, springboardForce);
             DisplayAction("SPRINGBOARD!", Color.magenta);
         }
@@ -846,9 +712,56 @@ private bool CalculateParkourMatrix(bool isTricking)
             sprites.transform.localRotation = Quaternion.Euler(0f, 0f, 0f);
             if (cubeSprite) cubeSprite.color = normalColor;
         }
+
+        private void HandlePassiveStumble()
+        {
+            if (isVaulting || !isGrounded || isStumbling || parkourAction.action.IsPressed()) return;
+
+            if (_toeHit.collider && !_waistHit.collider)
+            {
+                float trueTopY;
+                float obstacleDepth = CalculateObstacleDepth(_toeHit, out trueTopY);
+
+                bool isVaultableSize = obstacleDepth < 1.5f;
+                float armorCost = 50f; 
+
+                if (isVaultableSize && currentFlowMeter >= armorCost)
+                {
+                    currentFlowMeter -= armorCost;
+                    DisplayAction("STUMBLE PROTECTED!", Color.cyan);
+                    if (cubeSprite) cubeSprite.color = Color.cyan;
+                    StartCoroutine(VaultRoutine(_toeHit.collider, 0.2f, 0.1f)); 
+                }
+                else
+                {
+                    StartCoroutine(StumbleRoutine(_toeHit.collider));
+                }
+            }
+        }
+
+        private void HandleParkourHold()
+        {
+            if (isVaulting || !isGrounded || isStumbling) return; 
+            if (parkourAction.action.IsPressed()) FireParkourAction(false);
+        }
+
+        private void HandleStumbleDeceleration()
+        {
+            _stumbleTimer -= Time.deltaTime;
+        
+            float speedMultiplier = Mathf.Clamp01(_stumbleTimer / 3f); 
+            rb.linearVelocity = new Vector2(_lockedFacingDirection * topSpeed * speedMultiplier, rb.linearVelocity.y);
+
+            if (_stumbleTimer <= 0f)
+            {
+                isStumbling = false;
+                if (cubeSprite) cubeSprite.color = normalColor;
+                DisplayAction("RECOVERED", Color.white);
+            }
+        }
         #endregion
 
-        #region 5. COROUTINES
+        #region COROUTINES
         private IEnumerator WallScrambleRoutine()
         {
             isScrambling = true;
@@ -856,13 +769,11 @@ private bool CalculateParkourMatrix(bool isTricking)
             
             float timePassed = 0f;
             
-            // Drive them straight up for a set duration, as long as they touch the wall
             while (timePassed < wallScrambleDuration && _isCollidingFront)
             {
                 timePassed += Time.deltaTime;
                 rb.linearVelocity = new Vector2(0f, wallScrambleSpeed); 
                 
-                // If our ledge-grab logic catches a ledge mid-scramble, abort the scramble
                 if (isHanging || isVaulting) 
                 {
                     isScrambling = false;
@@ -874,6 +785,7 @@ private bool CalculateParkourMatrix(bool isTricking)
             
             isScrambling = false;
         }
+        
         private IEnumerator VaultRoutine(Collider2D obstacle, float duration, float extraHeight)
         {
             isVaulting = true;
@@ -991,25 +903,25 @@ private bool CalculateParkourMatrix(bool isTricking)
             float speedRatio = Mathf.Abs(rb.linearVelocity.x) / topSpeed;
             _stumbleTimer = Mathf.Clamp(5f * speedRatio, 1f, 5f);
         }
+        
         private IEnumerator DynamicStumbleRoutine(Collider2D obstacle, int severity)
         {
             isVaulting = true;
             isStumbling = true;
             
-            // Default to Red (Severe)
             Color flashColor = Color.red;
-            float tripDuration = 0.5f;     // How long the physical trip takes
-            float recoveryPenalty = 3f;    // How long you are stunned/slowed afterwards
+            float tripDuration = 0.5f;    
+            float recoveryPenalty = 3f;    
 
-            if (severity == 1) // YELLOW: Minor Hiccup
+            if (severity == 1) 
             {
-                flashColor = slideColor; // Yellow
+                flashColor = slideColor; 
                 tripDuration = 0.15f;
                 recoveryPenalty = 0.5f;
             }
-            else if (severity == 2) // ORANGE: Medium Stun
+            else if (severity == 2) 
             {
-                flashColor = new Color(1f, 0.5f, 0f); // Orange
+                flashColor = new Color(1f, 0.5f, 0f); 
                 tripDuration = 0.3f;
                 recoveryPenalty = 1.5f;
             }
@@ -1027,7 +939,6 @@ private bool CalculateParkourMatrix(bool isTricking)
 
             float timePassed = 0f;
 
-            // The physical drag over the tripping hazard
             while (timePassed < tripDuration)
             {
                 timePassed += Time.deltaTime;
@@ -1044,12 +955,11 @@ private bool CalculateParkourMatrix(bool isTricking)
             isVaulting = false;
             _lockedFacingDirection = facingDirection;
 
-            // Apply the severity penalty timer
             _stumbleTimer = recoveryPenalty;
         }
         #endregion
 
-        #region 6. UI, VISUALS & GIZMOS
+        #region UI & ANIMATOR
         private void HandleUI()
         {
             if (flowMeterFill)
@@ -1071,7 +981,7 @@ private bool CalculateParkourMatrix(bool isTricking)
                 float trueSpeed = Mathf.Abs(rb.linearVelocity.x);
                 speedUsText.text = (trueSpeed).ToString("F0") + " U/s";
                 float colorRatio = Mathf.InverseLerp(minTopSpeed, maxTopSpeed, trueSpeed);
-                speedKmhText.color = Color.Lerp(Color.white, Color.cyan, colorRatio);
+                speedUsText.color = Color.Lerp(Color.white, Color.cyan, colorRatio);
             }
 
             if (distanceText)
@@ -1087,7 +997,7 @@ private bool CalculateParkourMatrix(bool isTricking)
                 if (distance < 200f) difficultyText.text = "EASY";
                 else if (distance < 500f) difficultyText.text = "MEDIUM";
                 else if (distance < 800f) difficultyText.text = "HARD";
-                else difficultyText.text = "HAHAHA"; // Risk of Rain style endgame
+                else difficultyText.text = "HAHAHA"; 
             }
 
             if (flowCapacityText) flowCapacityText.text = currentFlowMeter.ToString("F0") + " / " + maxFlowMeter.ToString("F0");
@@ -1109,76 +1019,43 @@ private bool CalculateParkourMatrix(bool isTricking)
         private void HandleAnimation()
         {
             float currentAbsSpeed = Mathf.Abs(rb.linearVelocity.x);
-            float normalizedSpeed = 0f; // Default to 0 (Not moving)
+            float normalizedSpeed = 0f; 
 
             if (currentAbsSpeed > 0.1f) 
             {
                 if (currentAbsSpeed <= minTopSpeed)
                 {
-                    // Ramps smoothly from 0 up to 1 as you approach minTopSpeed
                     normalizedSpeed = Mathf.InverseLerp(0f, minTopSpeed, currentAbsSpeed);
                 }
                 else
                 {
-                    // Ramps smoothly from 1 up to 2 as you approach maxTopSpeed
                     normalizedSpeed = 1f + Mathf.InverseLerp(minTopSpeed, maxTopSpeed, currentAbsSpeed);
                 }
             }
 
-            // Send it to the Animator
             ghostAnimator.SetFloat("Speed", normalizedSpeed);
             
-            // 1. Read the actual player input (Intent)
             float inputX = moveAction.action.ReadValue<Vector2>().x;
             bool hasInput = Mathf.Abs(inputX) > 0.1f;
 
-            // // 2. Read the actual physical movement (Momentum)
-            // // Using a slightly higher threshold (0.5f) so they don't play a heavy brake animation for micro-movements
-            // bool hasMomentum = Mathf.Abs(rb.linearVelocity.x) > 0.5f; 
-            //
-            // // 3. Determine the Braking state
-            // // Braking happens when you let go of the stick (!hasInput), but you are still sliding forward (hasMomentum), and you are on the floor.
-            // bool isBraking = !hasInput && hasMomentum && isGrounded;
-
-            // --- SEND DATA TO ANIMATOR ---
-    
-            // Continuous Floats
-            ghostAnimator.SetFloat("Direction", facingDirection);
-    
-            // Core Movement Bools (Replaced the generic 'isMoving')
+            ghostAnimator.SetFloat("Direction", _animationDirection); // Updated this line!
             ghostAnimator.SetBool("HasInput", hasInput); 
-
-            // Contextual States
-            // ghostAnimator.SetBool("IsGrounded", isGrounded);
             ghostAnimator.SetBool("IsSliding", isSliding);
             ghostAnimator.SetBool("IsCrouching", isCrouching);
-            print(isCrouching);
-            // ghostAnimator.SetBool("IsWallSliding", isWallSliding);
-            
-            // 1. Send Vertical Velocity to Animator
-            // (Used to transition from Rise to Fall when it drops below 0)
-          //  ghostAnimator.SetFloat("VelocityY", rb.linearVelocity.y);
             ghostAnimator.SetBool("IsGrounded", isGrounded);
 
-            // 2. The Predictive Brace Logic
             bool isBracing = false;
 
-            // Only check for the floor if we are actively falling
             if (!isGrounded && rb.linearVelocity.y < -0.1f) 
             {
-                float t = 0.417f; // Your animation duration
+                float t = 0.417f; 
                 float v = Mathf.Abs(rb.linearVelocity.y);
                 float a = Mathf.Abs(Physics2D.gravity.y * rb.gravityScale);
 
-                // The true distance you will fall in 0.417 seconds, accounting for gravity
                 float predictDistance = (v * t) + (0.5f * a * (t * t));   
-                // Cast a ray from the feet to that exact predicted distance
                 RaycastHit2D braceHit = Physics2D.Raycast(footPosition.position, Vector2.down, predictDistance, groundLayer);
         
-                if (braceHit.collider)
-                {
-                    isBracing = true; // The floor is approaching fast! Extend the legs!
-                }
+                if (braceHit.collider) isBracing = true; 
             }
     
             ghostAnimator.SetBool("IsBracing", isBracing);
@@ -1209,16 +1086,12 @@ private bool CalculateParkourMatrix(bool isTricking)
             actionText.text = "";
         }
 
-        // --- CORRECTED: IN-GAME RAYCAST VISUALIZER ---
         private void OnDrawGizmos()
         {
             if (!headPosition || !chestPosition || !waistPosition || !shinPosition || !footPosition) return;
 
-            // BoxCast sweeps a box over a distance. To draw the full area being checked, 
-            // we stretch the Gizmo cube's X size by the cast distance, and push its center forward by half the distance.
             Vector3 offset = new Vector3(facingDirection * (sensorCastDistance / 2f), 0f, 0f);
 
-            // Helper function to draw the sweep
             void DrawSweep(Transform t, Vector2 size, RaycastHit2D hit)
             {
                 Gizmos.color = hit.collider ? Color.red : Color.green;
